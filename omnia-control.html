@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Omnia Control</title>
+ 
+<!-- PWA: instalable en PC y móvil -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0B0D10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Omnia Control">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+ 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+ 
+<style>
+  :root{
+    --bg:#0B0D10; --panel:#14171C; --panelAlt:#181C22; --border:#252A32;
+    --text:#EDEFF2; --muted:#8A93A3; --mutedDim:#5C6472;
+    --accent:#39D98A; --accentDim:rgba(57,217,138,0.12);
+    --danger:#FF6B5E; --dangerDim:rgba(255,107,94,0.12);
+    --warn:#FFB020; --warnDim:rgba(255,176,32,0.12);
+    --display:'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+    --mono:'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0; background:var(--bg); color:var(--text); font-family:var(--display); -webkit-font-smoothing:antialiased;}
+  button{font-family:var(--display); cursor:pointer; border:none;}
+  input,select,textarea{font-family:var(--display);}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .hidden{display:none !important;}
+ 
+  /* ---------- LOGIN ---------- */
+  #loginView{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
+  .login-card{width:100%; max-width:380px; background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:32px 28px;}
+  .login-brand{display:flex; align-items:center; gap:10px; margin-bottom:22px;}
+  .login-brand .dot{width:10px; height:10px; border-radius:50%; background:var(--accent);}
+  .login-brand span{font-weight:600; font-size:18px;}
+  .login-card h1{font-size:20px; margin:0 0 6px;}
+  .login-card p.sub{color:var(--muted); font-size:13px; margin:0 0 20px; line-height:1.5;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:11px; color:var(--muted); font-family:var(--mono); margin-bottom:6px; letter-spacing:.02em;}
+  .field input{width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text); font-size:14px;}
+  .btn{width:100%; padding:12px; border-radius:9px; font-weight:600; font-size:14px;}
+  .btn-accent{background:var(--accent); color:#04140C;}
+  .btn-ghost{background:var(--panelAlt); color:var(--muted); border:1px solid var(--border);}
+  .aviso{display:none; margin-top:12px; padding:10px 12px; border-radius:8px; font-size:12.5px; line-height:1.5;}
+  .aviso.error{background:var(--dangerDim); color:var(--danger);}
+  .aviso.info{background:var(--accentDim); color:var(--accent);}
+  .login-foot{margin-top:18px; text-align:center; font-size:11.5px; color:var(--mutedDim); font-family:var(--mono);}
+  .link-btn{background:none; color:var(--mutedDim); font-size:11.5px; text-decoration:underline; padding:0; width:auto; font-family:var(--mono);}
+ 
+  /* ---------- APP SHELL ---------- */
+  #appView{height:100vh; display:flex;}
+  aside{width:230px; flex-shrink:0; padding:20px; border-right:1px solid var(--border); display:flex; flex-direction:column;}
+  .brand{display:flex; align-items:center; gap:9px; margin-bottom:30px; padding:0 4px;}
+  .brand .box{height:32px; width:32px; border-radius:9px; background:var(--accentDim); display:flex; align-items:center; justify-content:center; font-size:15px;}
+  .brand .name{font-weight:600; font-size:14px; line-height:1.2;}
+  .brand .sub{font-size:9.5px; color:var(--mutedDim); font-family:var(--mono); letter-spacing:.05em;}
+  nav.side-nav{display:flex; flex-direction:column; gap:2px;}
+  nav.side-nav button{display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:11px; background:transparent; color:var(--muted); font-size:13.5px; text-align:left;}
+  nav.side-nav button.active{background:var(--panel); color:var(--text);}
+  nav.side-nav button .ico{font-size:15px; width:18px; text-align:center;}
+  nav.side-nav button .badge-count{margin-left:auto; font-size:10px; padding:2px 6px; border-radius:999px; background:var(--dangerDim); color:var(--danger); font-family:var(--mono);}
+  .side-foot{margin-top:auto; padding-top:16px; font-size:11px; color:var(--mutedDim); font-family:var(--mono); display:flex; align-items:center; gap:6px;}
+ 
+  main.content{flex:1; overflow-y:auto; display:flex; flex-direction:column;}
+  header.top{display:flex; align-items:center; justify-content:space-between; padding:20px 28px; border-bottom:1px solid var(--border);}
+  header.top h1{font-size:19px; margin:0;}
+  .top-actions{display:flex; gap:8px;}
+  .btn-small{padding:9px 14px; border-radius:10px; font-size:13px; font-weight:600; display:inline-flex; align-items:center; gap:6px;}
+ 
+  .view-body{padding:24px 28px 90px; flex:1;}
+  .grid-stats{display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:20px;}
+  @media(min-width:900px){ .grid-stats{grid-template-columns:repeat(4,1fr);} }
+  .stat-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:18px;}
+  .stat-card .label{font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--mutedDim); font-family:var(--mono);}
+  .stat-card .value{font-size:24px; font-weight:600; margin-top:4px; font-family:var(--display);}
+  .stat-card .sub{font-size:11.5px; color:var(--muted); margin-top:2px;}
+ 
+  .panel-block{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px;}
+  .row-list{border:1px solid var(--border); border-radius:16px; overflow:hidden;}
+  .row-item{display:flex; align-items:center; justify-content:space-between; gap:14px; padding:14px 16px; background:var(--panel); flex-wrap:wrap;}
+  .row-item + .row-item{border-top:1px solid var(--border);}
+  .row-empty{padding:34px; text-align:center; font-size:13px; color:var(--mutedDim);}
+ 
+  .badge{display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 10px; font-size:11px; font-family:var(--mono); font-weight:500;}
+  .badge .d{width:6px; height:6px; border-radius:50%;}
+  .badge-green{background:var(--accentDim); color:var(--accent);}
+  .badge-red{background:var(--dangerDim); color:var(--danger);}
+  .badge-amber{background:var(--warnDim); color:var(--warn);}
+  .badge-gray{background:var(--panelAlt); color:var(--mutedDim);}
+ 
+  .search-bar{display:flex; align-items:center; gap:8px; padding:10px 13px; border-radius:12px; background:var(--panel); border:1px solid var(--border); flex:1;}
+  .search-bar input{flex:1; background:transparent; border:none; outline:none; color:var(--text); font-family:var(--mono); font-size:13.5px;}
+  .filter-tabs{display:flex; gap:3px; padding:4px; border-radius:12px; background:var(--panel); border:1px solid var(--border); flex-wrap:wrap;}
+  .filter-tabs button{padding:7px 12px; border-radius:9px; background:transparent; color:var(--muted); font-size:12px; font-weight:500;}
+  .filter-tabs button.active{background:var(--panelAlt); color:var(--text);}
+  .toolbar{display:flex; flex-direction:column; gap:10px; margin-bottom:16px;}
+  @media(min-width:700px){ .toolbar{flex-direction:row;} }
+ 
+  .products-grid{display:grid; grid-template-columns:1fr; gap:14px;}
+  @media(min-width:640px){ .products-grid{grid-template-columns:repeat(2,1fr);} }
+  @media(min-width:1000px){ .products-grid{grid-template-columns:repeat(3,1fr);} }
+  .product-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; display:flex; flex-direction:column; gap:8px;}
+ 
+  .action-btn{display:inline-flex; align-items:center; gap:6px; padding:9px 13px; border-radius:10px; font-size:12px; font-weight:600;}
+ 
+  /* Modal */
+  .modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:flex-end; justify-content:center; z-index:100; padding:0;}
+  @media(min-width:640px){ .modal-backdrop{align-items:center; padding:16px;} }
+  .modal{background:var(--panel); border:1px solid var(--border); width:100%; max-width:440px; border-radius:18px 18px 0 0; padding:22px; max-height:90vh; overflow-y:auto;}
+  @media(min-width:640px){ .modal{border-radius:18px;} }
+  .modal-head{display:flex; align-items:center; justify-content:between; justify-content:space-between; margin-bottom:14px;}
+  .modal-head h3{font-size:17px; margin:0;}
+  .modal-close{background:none; color:var(--muted); font-size:19px; padding:4px;}
+ 
+  /* Mobile bottom nav */
+  #mobileNav{display:none; position:fixed; bottom:0; left:0; right:0; background:var(--panel); border-top:1px solid var(--border); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); z-index:40;}
+  @media(max-width:840px){ #mobileNav{display:flex; justify-content:space-around;} aside{display:none;} }
+  #mobileNav button{background:none; display:flex; flex-direction:column; align-items:center; gap:2px; color:var(--mutedDim); font-size:9px; font-family:var(--mono); padding:6px 8px;}
+  #mobileNav button.active{color:var(--accent);}
+  #mobileNav button .ico{font-size:16px;}
+ 
+  ::-webkit-scrollbar{width:8px; height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border); border-radius:8px;}
+</style>
+</head>
+<body>
+ 
+<!-- =================== LOGIN =================== -->
+<div id="loginView">
+  <div class="login-card">
+    <div class="login-brand"><span class="dot"></span><span>Omnia Control</span></div>
+ 
+    <div id="setupStep">
+      <h1>Configura la conexión</h1>
+      <p class="sub">Pega la URL de tu Apps Script publicado (termina en <code>/exec</code>). Solo se pide una vez por dispositivo.</p>
+      <div class="field"><label>URL de Apps Script</label><input id="setupUrl" placeholder="https://script.google.com/macros/s/XXXX/exec" /></div>
+      <button class="btn btn-accent" onclick="guardarApiUrl()">Guardar y continuar</button>
+      <div class="aviso error" id="setupAviso"></div>
+    </div>
+ 
+    <div id="loginStep" class="hidden">
+      <h1>Acceso de administrador</h1>
+      <p class="sub">Solo tú puedes entrar a este panel.</p>
+      <div class="field"><label>Clave maestra</label><input id="adminKey" type="password" placeholder="••••••" /></div>
+      <button class="btn btn-accent" id="btnLogin" onclick="intentarLogin()">Ingresar →</button>
+      <div class="aviso error" id="loginAviso"></div>
+      <div class="login-foot">
+        <button class="link-btn" onclick="mostrarSetup()">Cambiar URL de conexión</button>
+      </div>
+    </div>
+  </div>
+</div>
+ 
+<!-- =================== APP =================== -->
+<div id="appView" class="hidden">
+  <aside>
+    <div class="brand">
+      <div class="box">🛡️</div>
+      <div><div class="name">Omnia Control</div><div class="sub">OMNIA TECHNOLOGY</div></div>
+    </div>
+    <nav class="side-nav" id="sideNav"></nav>
+    <div class="side-foot"><span id="syncStatus">● sincronizado</span></div>
+  </aside>
+ 
+  <main class="content">
+    <header class="top">
+      <h1 id="viewTitle">Panel</h1>
+      <div class="top-actions" id="viewActions"></div>
+    </header>
+    <div class="view-body" id="viewBody"></div>
+  </main>
+</div>
+ 
+<div id="mobileNav"></div>
+<div id="modalRoot"></div>
+ 
+<script>
+/* =========================================================================
+   CONFIGURACIÓN
+   ========================================================================= */
+const NAV = [
+  { id: "dashboard", label: "Panel", ico: "📊" },
+  { id: "products", label: "Productos", ico: "📦" },
+  { id: "licenses", label: "Licencias", ico: "🔑" },
+  { id: "sales", label: "Ventas", ico: "📈" },
+  { id: "payments", label: "Pagos", ico: "💳" },
+  { id: "demos", label: "Demos", ico: "🧪" },
+  { id: "tickets", label: "Soporte", ico: "🛟" },
+  { id: "leads", label: "Leads", ico: "📩" },
+  { id: "settings", label: "Config.", ico: "⚙️" },
+];
+const SHEETS = { products: "Products", licenses: "Licenses", sales: "Sales", payments: "Payments", demos: "DemoRequests", tickets: "Tickets", leads: "Leads" };
+ 
+const SESSION_KEY = "omnia_admin_session";
+const SESSION_TTL_MIN = 30;
+const MAX_INTENTOS = 5;
+const BLOQUEO_MIN = 2;
+let intentosFallidos = 0, bloqueadoHasta = 0, inactividadTimer = null;
+ 
+let currentView = "dashboard";
+let STATE = { products: [], licenses: [], sales: [], payments: [], demos: [], tickets: [], leads: [] };
+let filters = { search: "", status: "all" };
+ 
+/* =========================================================================
+   UTILIDADES
+   ========================================================================= */
+function getApiUrl(){ return localStorage.getItem("omnia_api_url") || ""; }
+function setApiUrl(url){ localStorage.setItem("omnia_api_url", url); }
+function uid(p){ return `${p}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`; }
+function genKey(){ const s=()=>Math.random().toString(36).slice(2,6).toUpperCase(); return `${s()}-${s()}-${s()}-${s()}`; }
+function formatMoney(n){ return new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(Number(n)||0); }
+function formatDate(iso){ if(!iso) return "—"; return new Date(iso).toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}); }
+function formatDateTime(iso){ if(!iso) return "—"; return new Date(iso).toLocaleString("es-ES",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}); }
+function daysLeft(iso){ if(!iso) return null; return Math.ceil((new Date(iso)-new Date())/86400000); }
+function productName(id){ const p = STATE.products.find(p=>p.id===id); return p ? p.name : "—"; }
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+ 
+async function apiList(sheetKey){
+  const url = getApiUrl(); if(!url) return [];
+  try{ const r = await fetch(`${url}?action=list&sheet=${encodeURIComponent(SHEETS[sheetKey])}`); const j = await r.json(); return Array.isArray(j)?j:[]; }
+  catch(e){ console.error("Error leyendo", sheetKey, e); return []; }
+}
+async function apiPost(body){
+  const url = getApiUrl(); if(!url) return null;
+  try{ const r = await fetch(url,{method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify(body)}); return await r.json(); }
+  catch(e){ console.error("Error escribiendo", body, e); return null; }
+}
+function setSyncStatus(text){ const el=document.getElementById("syncStatus"); if(el) el.textContent = text; }
+ 
+/* =========================================================================
+   SEGURIDAD / SESIÓN
+   ========================================================================= */
+function guardarSesion(){ sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ok:true, expira: Date.now()+SESSION_TTL_MIN*60000 })); }
+function verificarSesionExistente(){
+  try{
+    const raw = sessionStorage.getItem(SESSION_KEY); if(!raw) return false;
+    const s = JSON.parse(raw);
+    if(!s.ok || !s.expira || Date.now()>s.expira){ sessionStorage.removeItem(SESSION_KEY); return false; }
+    return true;
+  }catch(e){ return false; }
+}
+function reiniciarInactividad(){ clearTimeout(inactividadTimer); inactividadTimer = setTimeout(cerrarSesion, SESSION_TTL_MIN*60000); guardarSesion(); }
+function cerrarSesion(){
+  sessionStorage.removeItem(SESSION_KEY);
+  clearTimeout(inactividadTimer);
+  document.getElementById("appView").classList.add("hidden");
+  document.getElementById("loginView").classList.remove("hidden");
+  document.getElementById("adminKey").value = "";
+  mostrarLogin();
+}
+["click","keydown","mousemove","touchstart"].forEach(evt => document.addEventListener(evt, () => { if(!document.getElementById("appView").classList.contains("hidden")) reiniciarInactividad(); }));
+ 
+function mostrarSetup(){
+  document.getElementById("setupStep").classList.remove("hidden");
+  document.getElementById("loginStep").classList.add("hidden");
+  document.getElementById("setupUrl").value = getApiUrl();
+}
+function mostrarLogin(){
+  document.getElementById("setupStep").classList.add("hidden");
+  document.getElementById("loginStep").classList.remove("hidden");
+}
+function guardarApiUrl(){
+  const val = document.getElementById("setupUrl").value.trim();
+  const aviso = document.getElementById("setupAviso");
+  if(!val.startsWith("http")){ aviso.style.display="block"; aviso.textContent="Pega una URL válida (empieza con https://)."; return; }
+  setApiUrl(val);
+  aviso.style.display="none";
+  mostrarLogin();
+}
+ 
+async function intentarLogin(){
+  const key = document.getElementById("adminKey").value.trim();
+  const aviso = document.getElementById("loginAviso");
+  const btn = document.getElementById("btnLogin");
+  aviso.style.display = "none";
+ 
+  if(Date.now() < bloqueadoHasta){
+    const seg = Math.ceil((bloqueadoHasta-Date.now())/1000);
+    aviso.style.display="block"; aviso.textContent = `Demasiados intentos. Espera ${seg}s.`;
+    return;
+  }
+  if(!key){ aviso.style.display="block"; aviso.textContent="Ingresa la clave."; return; }
+  if(!getApiUrl()){ mostrarSetup(); return; }
+ 
+  btn.disabled = true; btn.textContent = "Verificando...";
+  try{
+    const r = await fetch(`${getApiUrl()}?action=verificarAdminKey&key=${encodeURIComponent(key)}`);
+    const data = await r.json();
+    if(data && data.ok === true){
+      intentosFallidos = 0;
+      guardarSesion();
+      reiniciarInactividad();
+      entrarAlPanel();
+    } else {
+      intentosFallidos++;
+      if(intentosFallidos >= MAX_INTENTOS){ bloqueadoHasta = Date.now()+BLOQUEO_MIN*60000; intentosFallidos=0; }
+      aviso.style.display="block"; aviso.textContent="Clave incorrecta.";
+    }
+  }catch(err){
+    aviso.style.display="block"; aviso.textContent="Error de conexión: "+err.message;
+  }finally{
+    btn.disabled=false; btn.textContent="Ingresar →";
+  }
+}
+ 
+function entrarAlPanel(){
+  document.getElementById("loginView").classList.add("hidden");
+  document.getElementById("appView").classList.remove("hidden");
+  renderNav();
+  cargarTodo();
+}
+ 
+/* =========================================================================
+   CARGA DE DATOS
+   ========================================================================= */
+async function cargarTodo(){
+  setSyncStatus("● sincronizando…");
+  const [products, licenses, sales, payments, demos, tickets, leads] = await Promise.all([
+    apiList("products"), apiList("licenses"), apiList("sales"), apiList("payments"), apiList("demos"), apiList("tickets"), apiList("leads"),
+  ]);
+  const now = Date.now();
+  STATE.products = products;
+  STATE.licenses = licenses.map(l => (l.type==="demo" && l.status==="active" && l.expiresAt && new Date(l.expiresAt).getTime()<now) ? {...l, status:"expired"} : l);
+  STATE.sales = sales;
+  STATE.payments = payments;
+  STATE.demos = demos;
+  STATE.tickets = tickets;
+  STATE.leads = leads;
+  setSyncStatus("● sincronizado");
+  renderNav();
+  renderView();
+}
+ 
+/* =========================================================================
+   NAVEGACIÓN
+   ========================================================================= */
+function renderNav(){
+  const openTickets = STATE.tickets.filter(t=>t.status!=="resuelto").length;
+  const newLeads = STATE.leads.filter(l=>l.status==="nuevo").length;
+  const navHtml = (mobile) => NAV.filter(n => !mobile || ["dashboard","licenses","sales","demos","leads"].includes(n.id)).map(n => `
+    <button class="${currentView===n.id?'active':''}" onclick="irA('${n.id}')">
+      <span class="ico">${n.ico}</span>${mobile?'':`<span>${n.label}</span>`}
+      ${n.id==="tickets" && openTickets>0 ? `<span class="badge-count">${openTickets}</span>` : ""}
+      ${n.id==="leads" && newLeads>0 ? `<span class="badge-count">${newLeads}</span>` : ""}
+    </button>`).join("");
+  document.getElementById("sideNav").innerHTML = navHtml(false);
+  document.getElementById("mobileNav").innerHTML = navHtml(true);
+  document.getElementById("viewTitle").textContent = NAV.find(n=>n.id===currentView)?.label || "";
+}
+function irA(view){ currentView = view; filters = { search:"", status:"all" }; renderNav(); renderView(); }
+ 
+function renderView(){
+  const body = document.getElementById("viewBody");
+  const actions = document.getElementById("viewActions");
+  actions.innerHTML = "";
+ 
+  if(currentView==="dashboard") body.innerHTML = viewDashboard();
+  if(currentView==="products"){ body.innerHTML = viewProducts(); actions.innerHTML = `<button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="abrirModalProducto()">+ Nuevo producto</button>`; }
+  if(currentView==="licenses") body.innerHTML = viewLicenses();
+  if(currentView==="sales"){ body.innerHTML = viewSales(); actions.innerHTML = `<button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="abrirModalVenta()">+ Registrar venta</button>`; }
+  if(currentView==="payments"){ body.innerHTML = viewPayments(); actions.innerHTML = `<button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="abrirModalPago()">+ Registrar cobro</button>`; }
+  if(currentView==="demos") body.innerHTML = viewDemos();
+  if(currentView==="tickets") body.innerHTML = viewTickets();
+  if(currentView==="leads") body.innerHTML = viewLeads();
+  if(currentView==="settings") body.innerHTML = viewSettings();
+}
+ 
+/* =========================================================================
+   VISTA: DASHBOARD
+   ========================================================================= */
+function viewDashboard(){
+  const proActive = STATE.licenses.filter(l=>l.type==="pro" && l.status==="active").length;
+  const demoActive = STATE.licenses.filter(l=>l.type==="demo" && l.status==="active").length;
+  const mrr = STATE.licenses.filter(l=>l.type==="pro" && l.status==="active").reduce((s,l)=>{
+    const p = STATE.products.find(pp=>pp.id===l.productId); if(!p) return s;
+    const price = Number(p.proPrice)||0;
+    return s + (p.billingCycle==="Mensual" ? price : p.billingCycle==="Anual" ? price/12 : 0);
+  },0);
+  const openTickets = STATE.tickets.filter(t=>t.status!=="resuelto").length;
+  const proximos = STATE.licenses.filter(l=>l.type==="demo" && l.status==="active" && l.expiresAt)
+    .sort((a,b)=>new Date(a.expiresAt)-new Date(b.expiresAt)).slice(0,6);
+ 
+  return `
+    <div class="grid-stats">
+      <div class="stat-card"><div class="label">Licencias Pro activas</div><div class="value" style="color:var(--accent)">${proActive}</div></div>
+      <div class="stat-card"><div class="label">Demos activas</div><div class="value">${demoActive}</div></div>
+      <div class="stat-card"><div class="label">MRR estimado</div><div class="value">${formatMoney(mrr)}</div><div class="sub">prorrateado</div></div>
+      <div class="stat-card"><div class="label">Tickets abiertos</div><div class="value" style="color:${openTickets?'var(--danger)':'var(--text)'}">${openTickets}</div></div>
+    </div>
+    <div class="panel-block">
+      <div style="font-size:13.5px; font-weight:600; margin-bottom:12px;">Demos por vencer</div>
+      ${proximos.length===0 ? `<div style="font-size:12.5px; color:var(--mutedDim);">Sin demos activas.</div>` :
+        proximos.map(l => `<div style="display:flex; justify-content:space-between; font-size:12.5px; padding:6px 0; border-top:1px solid var(--border);">
+          <span style="color:var(--muted)">${esc(l.clientName)} · ${esc(productName(l.productId))}</span>
+          <span style="font-family:var(--mono); color:${daysLeft(l.expiresAt)<=2?'var(--warn)':'var(--mutedDim)'}">${daysLeft(l.expiresAt)}d</span>
+        </div>`).join("")}
+    </div>
+  `;
+}
+ 
+/* =========================================================================
+   VISTA: PRODUCTOS
+   ========================================================================= */
+function viewProducts(){
+  if(STATE.products.length===0) return `<div class="row-empty">Sin productos todavía. Crea el primero.</div>`;
+  return `<div class="products-grid">${STATE.products.map(p => `
+    <div class="product-card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-weight:600; font-size:14.5px;">${esc(p.name)}</span>
+        <span class="badge badge-gray">${esc(p.category||"")}</span>
+      </div>
+      <p style="font-size:12.5px; color:var(--muted); margin:0; line-height:1.5;">${esc(p.description||"")}</p>
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:4px;">
+        <span style="font-family:var(--mono); color:var(--accent); font-size:15px;">${formatMoney(p.proPrice)} / ${String(p.billingCycle||"").toLowerCase()}</span>
+        <span style="font-family:var(--mono); font-size:11px; color:var(--mutedDim);">demo ${p.demoDurationDays}d</span>
+      </div>
+    </div>`).join("")}</div>`;
+}
+ 
+/* =========================================================================
+   VISTA: LICENCIAS
+   ========================================================================= */
+function licenseTone(l){ if(l.status==="active") return "green"; if(l.status==="expired") return "amber"; return "red"; }
+function licenseLabel(l){ if(l.status==="active") return "ACTIVA"; if(l.status==="expired") return "EXPIRADA"; return "BLOQUEADA"; }
+ 
+function viewLicenses(){
+  const filtered = STATE.licenses.filter(l => {
+    const s = (l.clientName+productName(l.productId)+l.key).toLowerCase().includes(filters.search.toLowerCase());
+    const st = filters.status==="all" || l.status===filters.status || (filters.status==="pro"&&l.type==="pro") || (filters.status==="demo"&&l.type==="demo");
+    return s && st;
+  });
+  const tabs = [["all","Todas"],["active","Activas"],["pro","Pro"],["demo","Demo"],["locked","Bloqueadas"],["expired","Expiradas"]];
+ 
+  return `
+    <div class="toolbar">
+      <div class="search-bar">🔎 <input placeholder="Buscar por cliente, producto o clave…" value="${esc(filters.search)}" oninput="filters.search=this.value; renderView();" /></div>
+      <div class="filter-tabs">${tabs.map(([v,l]) => `<button class="${filters.status===v?'active':''}" onclick="filters.status='${v}'; renderView();">${l}</button>`).join("")}</div>
+    </div>
+    <div class="row-list">
+      ${filtered.length===0 ? `<div class="row-empty">Sin resultados.</div>` : filtered.map(l => `
+        <div class="row-item">
+          <div style="min-width:0; flex:1;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:13.5px; font-weight:500;">${esc(l.clientName)}</span>
+              <span class="badge ${l.type==='pro'?'badge-green':'badge-amber'}">${l.type==='pro'?'PRO':'DEMO'}</span>
+              <span class="badge badge-${licenseTone(l)}">${licenseLabel(l)}</span>
+            </div>
+            <div style="font-size:11.5px; color:var(--muted); margin-top:3px;">${esc(productName(l.productId))} · <span style="font-family:var(--mono)">${esc(l.key)}</span></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <span style="font-size:11px; color:var(--mutedDim); font-family:var(--mono);">${l.expiresAt?`vence ${formatDate(l.expiresAt)}`:"sin vencimiento"}</span>
+            <button class="action-btn" style="background:${l.status==='active'?'var(--dangerDim)':'var(--accentDim)'}; color:${l.status==='active'?'var(--danger)':'var(--accent)'};" onclick="toggleLicense('${l.id}')">
+              ${l.status==='active' ? '🔒 Bloquear' : '🔓 Activar'}
+            </button>
+          </div>
+        </div>`).join("")}
+    </div>
+  `;
+}
+async function toggleLicense(id){
+  const lic = STATE.licenses.find(l=>l.id===id); if(!lic) return;
+  const nuevo = lic.status==="active" ? "locked" : "active";
+  lic.status = nuevo; renderView(); // optimista
+  await apiPost({ action:"toggleLicense", id });
+}
+ 
+/* =========================================================================
+   VISTA: VENTAS / PAGOS / DEMOS / TICKETS
+   ========================================================================= */
+function viewSales(){
+  if(STATE.sales.length===0) return `<div class="row-empty">Todavía no hay ventas.</div>`;
+  return `<div class="row-list">${STATE.sales.map(s => `
+    <div class="row-item">
+      <div><div style="font-size:13.5px; font-weight:500;">${esc(s.clientName)}</div><div style="font-size:11.5px; color:var(--mutedDim); font-family:var(--mono);">${esc(productName(s.productId))} · ${formatDate(s.date)}</div></div>
+      <span style="font-family:var(--mono); font-weight:500;">${formatMoney(s.amount)}</span>
+    </div>`).join("")}</div>`;
+}
+function viewPayments(){
+  if(STATE.payments.length===0) return `<div class="row-empty">Todavía no hay cobros.</div>`;
+  return `<div class="row-list">${STATE.payments.map(p => `
+    <div class="row-item">
+      <div><div style="font-size:13.5px; font-weight:500;">${esc(p.clientName)}</div><div style="font-size:11.5px; color:var(--mutedDim); font-family:var(--mono);">${formatDate(p.date)}</div></div>
+      <div style="display:flex; align-items:center; gap:10px;"><span class="badge badge-green">${esc(p.status)}</span><span style="font-family:var(--mono); font-weight:500;">${formatMoney(p.amount)}</span></div>
+    </div>`).join("")}</div>`;
+}
+function viewDemos(){
+  if(STATE.demos.length===0) return `<div class="row-empty">Todavía no hay solicitudes de demo.</div>`;
+  return `<div class="row-list">${STATE.demos.map(d => {
+    const lic = STATE.licenses.find(l=>l.id===d.licenseId);
+    return `<div class="row-item">
+      <div><div style="font-size:13.5px; font-weight:500;">${esc(d.name)} <span style="color:var(--mutedDim); font-weight:400;">· ${esc(d.company||"")}</span></div>
+      <div style="font-size:11.5px; color:var(--mutedDim); font-family:var(--mono);">${esc(d.email)} · ${esc(productName(d.productId))} · ${formatDateTime(d.createdAt)}</div></div>
+      ${lic ? `<span class="badge badge-${licenseTone(lic)}">${licenseLabel(lic)}${lic.expiresAt?` · ${daysLeft(lic.expiresAt)}d`:""}</span>` : ""}
+    </div>`;
+  }).join("")}</div>`;
+}
+function viewTickets(){
+  if(STATE.tickets.length===0) return `<div class="row-empty">Sin incidencias registradas.</div>`;
+  return STATE.tickets.map(t => `
+    <div class="panel-block" style="margin-bottom:10px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px;">
+      <div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:13.5px; font-weight:500;">${esc(t.subject)}</span>
+          <span class="badge badge-${t.priority==='alta'?'red':t.priority==='media'?'amber':'gray'}">${esc(t.priority)}</span>
+        </div>
+        <div style="font-size:11.5px; color:var(--mutedDim); font-family:var(--mono); margin-top:4px;">${esc(t.clientName)} · ${esc(t.email)} · ${formatDateTime(t.createdAt)}</div>
+      </div>
+      <select onchange="cambiarEstadoTicket('${t.id}', this.value)" style="padding:8px 10px; border-radius:9px; background:var(--panelAlt); border:1px solid var(--border); color:var(--text); font-size:12px;">
+        <option value="abierto" ${t.status==='abierto'?'selected':''}>Abierto</option>
+        <option value="en_progreso" ${t.status==='en_progreso'?'selected':''}>En progreso</option>
+        <option value="resuelto" ${t.status==='resuelto'?'selected':''}>Resuelto</option>
+      </select>
+    </div>`).join("");
+}
+async function cambiarEstadoTicket(id, status){
+  const t = STATE.tickets.find(x=>x.id===id); if(t) t.status = status;
+  renderNav();
+  await apiPost({ action:"update", sheet: SHEETS.tickets, id, data:{ status } });
+}
+ 
+/* =========================================================================
+   VISTA: LEADS ("contratar" / "pedir información" desde el sitio público —
+   no generan licencia sola; les das seguimiento tú y cierras la venta
+   manualmente desde Ventas cuando el cliente paga)
+   ========================================================================= */
+function leadToneLabel(status){
+  if(status==="nuevo") return ["red","NUEVO"];
+  if(status==="contactado") return ["amber","CONTACTADO"];
+  return ["green","CERRADO"];
+}
+function viewLeads(){
+  if(STATE.leads.length===0) return `<div class="row-empty">Todavía no hay solicitudes de contratación/información.</div>`;
+  const ordenados = [...STATE.leads].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+  return ordenados.map(l => {
+    const [tone, label] = leadToneLabel(l.status);
+    return `
+    <div class="panel-block" style="margin-bottom:10px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px;">
+      <div style="min-width:0; flex:1;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:13.5px; font-weight:600;">${esc(l.businessName)}</span>
+          <span class="badge badge-${tone}">${label}</span>
+        </div>
+        <div style="font-size:11.5px; color:var(--muted); margin-top:4px;">${esc(l.contactName||"")} · <span style="font-family:var(--mono)">${esc(l.whatsapp)}</span>${l.email?` · ${esc(l.email)}`:""}${l.city?` · ${esc(l.city)}`:""}</div>
+        <div style="font-size:11.5px; color:var(--mutedDim); font-family:var(--mono); margin-top:4px;">${esc(l.products||"")} · ${formatDateTime(l.createdAt)}</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <a href="https://wa.me/${esc((l.whatsapp||'').replace(/\\D/g,''))}" target="_blank" class="action-btn" style="background:var(--accentDim); color:var(--accent);">💬 WhatsApp</a>
+        <select onchange="cambiarEstadoLead('${l.id}', this.value)" style="padding:8px 10px; border-radius:9px; background:var(--panelAlt); border:1px solid var(--border); color:var(--text); font-size:12px;">
+          <option value="nuevo" ${l.status==='nuevo'?'selected':''}>Nuevo</option>
+          <option value="contactado" ${l.status==='contactado'?'selected':''}>Contactado</option>
+          <option value="cerrado" ${l.status==='cerrado'?'selected':''}>Cerrado</option>
+        </select>
+      </div>
+    </div>`;
+  }).join("");
+}
+async function cambiarEstadoLead(id, status){
+  const l = STATE.leads.find(x=>x.id===id); if(l) l.status = status;
+  renderNav();
+  await apiPost({ action:"updateLeadStatus", id, status });
+}
+ 
+/* =========================================================================
+   VISTA: CONFIGURACIÓN
+   ========================================================================= */
+function viewSettings(){
+  return `
+    <div style="max-width:560px; display:flex; flex-direction:column; gap:14px;">
+      <div class="panel-block">
+        <div style="font-size:13.5px; font-weight:600; margin-bottom:8px;">Conexión con Google Sheets / Apps Script</div>
+        <div class="field"><label>URL de Apps Script</label><input id="settingsUrl" value="${esc(getApiUrl())}" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text); font-family:var(--mono); font-size:13px;" /></div>
+        <button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="actualizarApiUrl()">Guardar</button>
+      </div>
+      <div class="panel-block">
+        <div style="font-size:13.5px; font-weight:600; margin-bottom:8px;">Endpoint de verificación (referencia)</div>
+        <pre style="background:var(--panelAlt); border:1px solid var(--border); border-radius:10px; padding:12px; font-family:var(--mono); font-size:11.5px; color:var(--muted); overflow-x:auto;">GET {tu-url}/exec?action=verify&key=XXXX-XXXX-XXXX-XXXX&productId=prod_x
+ 
+200 { "status": "active" }
+403 { "status": "locked" | "expired" }</pre>
+      </div>
+      <div class="panel-block">
+        <div style="font-size:13.5px; font-weight:600; margin-bottom:6px;">Sesión</div>
+        <button class="btn-small" style="background:var(--dangerDim); color:var(--danger);" onclick="cerrarSesion()">Cerrar sesión</button>
+      </div>
+    </div>
+  `;
+}
+function actualizarApiUrl(){ setApiUrl(document.getElementById("settingsUrl").value.trim()); cargarTodo(); }
+ 
+/* =========================================================================
+   MODALES: nuevo producto / venta / pago
+   ========================================================================= */
+function cerrarModal(){ document.getElementById("modalRoot").innerHTML = ""; }
+ 
+function abrirModalProducto(){
+  document.getElementById("modalRoot").innerHTML = `
+    <div class="modal-backdrop" onclick="if(event.target===this) cerrarModal()">
+      <div class="modal">
+        <div class="modal-head"><h3>Nuevo producto</h3><button class="modal-close" onclick="cerrarModal()">✕</button></div>
+        <div class="field"><label>Nombre</label><input id="pName" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);" /></div>
+        <div class="field"><label>Categoría</label><input id="pCategory" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);" /></div>
+        <div class="field"><label>Precio Pro (MXN)</label><input id="pPrice" type="number" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);" /></div>
+        <div class="field"><label>Ciclo de cobro</label><select id="pCycle" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);"><option>Mensual</option><option>Anual</option><option>Único</option></select></div>
+        <div class="field"><label>Duración del demo (días)</label><input id="pDemoDays" type="number" value="7" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);" /></div>
+        <div class="field"><label>Descripción</label><input id="pDesc" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);" /></div>
+        <button class="btn btn-accent" onclick="crearProducto()">Crear producto</button>
+      </div>
+    </div>`;
+}
+async function crearProducto(){
+  const data = {
+    id: uid("prod"), name: document.getElementById("pName").value.trim(),
+    category: document.getElementById("pCategory").value.trim(),
+    proPrice: Number(document.getElementById("pPrice").value)||0,
+    billingCycle: document.getElementById("pCycle").value,
+    demoDurationDays: Number(document.getElementById("pDemoDays").value)||7,
+    description: document.getElementById("pDesc").value.trim(),
+    stripePriceId: "",
+  };
+  if(!data.name) return;
+  STATE.products.unshift(data); cerrarModal(); renderView();
+  await apiPost({ action:"create", sheet: SHEETS.products, data });
+}
+ 
+function abrirModalVenta(){
+  const opts = STATE.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  document.getElementById("modalRoot").innerHTML = `
+    <div class="modal-backdrop" onclick="if(event.target===this) cerrarModal()">
+      <div class="modal">
+        <div class="modal-head"><h3>Registrar venta</h3><button class="modal-close" onclick="cerrarModal()">✕</button></div>
+        <div class="field"><label>Producto</label><select id="sProduct" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);">${opts}</select></div>
+        <div class="field"><label>Cliente</label><input id="sClient" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);" /></div>
+        <div class="field"><label>Email</label><input id="sEmail" type="email" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);" /></div>
+        <div class="field"><label>Monto (MXN)</label><input id="sAmount" type="number" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);" /></div>
+        <p style="font-size:11.5px; color:var(--mutedDim); margin:4px 0 14px;">Genera la licencia Pro automáticamente. En el sitio público esto lo dispara el webhook de Stripe.</p>
+        <button class="btn btn-accent" onclick="crearVenta()">Registrar</button>
+      </div>
+    </div>`;
+}
+async function crearVenta(){
+  const productId = document.getElementById("sProduct").value;
+  const clientName = document.getElementById("sClient").value.trim();
+  const email = document.getElementById("sEmail").value.trim();
+  const amount = Number(document.getElementById("sAmount").value)||0;
+  if(!productId || !clientName || !amount) return;
+  cerrarModal();
+ 
+  const sale = { id: uid("sale"), productId, clientName, email, amount, date: new Date().toISOString(), stripeSessionId: "manual_"+Date.now() };
+  const lic = { id: uid("lic"), productId, clientName, email, type:"pro", key: genKey(), status:"active", createdAt:new Date().toISOString(), expiresAt:"", stripeCustomerId:"", stripeSubscriptionId:"", lastNotifiedAt:"" };
+  const pay = { id: uid("pay"), licenseId: lic.id, clientName, amount, date:new Date().toISOString(), status:"completado" };
+ 
+  STATE.sales.unshift(sale); STATE.licenses.unshift(lic); STATE.payments.unshift(pay); renderView();
+  await Promise.all([
+    apiPost({ action:"create", sheet: SHEETS.sales, data: sale }),
+    apiPost({ action:"create", sheet: SHEETS.licenses, data: lic }),
+    apiPost({ action:"create", sheet: SHEETS.payments, data: pay }),
+  ]);
+}
+ 
+function abrirModalPago(){
+  const proLic = STATE.licenses.filter(l=>l.type==="pro");
+  const opts = proLic.map(l=>`<option value="${l.id}">${esc(l.clientName)}</option>`).join("");
+  document.getElementById("modalRoot").innerHTML = `
+    <div class="modal-backdrop" onclick="if(event.target===this) cerrarModal()">
+      <div class="modal">
+        <div class="modal-head"><h3>Registrar cobro</h3><button class="modal-close" onclick="cerrarModal()">✕</button></div>
+        <div class="field"><label>Cliente Pro</label><select id="payLicense" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);">${opts}</select></div>
+        <div class="field"><label>Monto (MXN)</label><input id="payAmount" type="number" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text);" /></div>
+        <button class="btn btn-accent" onclick="crearPago()">Registrar</button>
+      </div>
+    </div>`;
+}
+async function crearPago(){
+  const licenseId = document.getElementById("payLicense").value;
+  const amount = Number(document.getElementById("payAmount").value)||0;
+  const lic = STATE.licenses.find(l=>l.id===licenseId);
+  if(!licenseId || !amount || !lic) return;
+  cerrarModal();
+  const pay = { id: uid("pay"), licenseId, clientName: lic.clientName, amount, date:new Date().toISOString(), status:"completado" };
+  STATE.payments.unshift(pay); renderView();
+  await apiPost({ action:"create", sheet: SHEETS.payments, data: pay });
+}
+ 
+/* =========================================================================
+   ARRANQUE
+   ========================================================================= */
+document.addEventListener("DOMContentLoaded", () => {
+  if(!getApiUrl()) mostrarSetup(); else mostrarLogin();
+  document.getElementById("adminKey")?.addEventListener("keydown", e => { if(e.key==="Enter") intentarLogin(); });
+  document.getElementById("setupUrl")?.addEventListener("keydown", e => { if(e.key==="Enter") guardarApiUrl(); });
+ 
+  if(verificarSesionExistente() && getApiUrl()){
+    reiniciarInactividad();
+    entrarAlPanel();
+  }
+ 
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.register("sw.js").catch(err => console.error("SW no registrado:", err));
+  }
+});
+</script>
+</body>
+</html>
