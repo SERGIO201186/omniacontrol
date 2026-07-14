@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Omnia Control</title>
- 
+
 <!-- PWA: instalable en PC y móvil -->
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0B0D10">
@@ -13,10 +13,10 @@
 <meta name="apple-mobile-web-app-title" content="Omnia Control">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
- 
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
- 
+
 <style>
   :root{
     --bg:#0B0D10; --panel:#14171C; --panelAlt:#181C22; --border:#252A32;
@@ -34,7 +34,7 @@
   input,select,textarea{font-family:var(--display);}
   :focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
   .hidden{display:none !important;}
- 
+
   /* ---------- LOGIN ---------- */
   #loginView{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
   .login-card{width:100%; max-width:380px; background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:32px 28px;}
@@ -54,7 +54,7 @@
   .aviso.info{background:var(--accentDim); color:var(--accent);}
   .login-foot{margin-top:18px; text-align:center; font-size:11.5px; color:var(--mutedDim); font-family:var(--mono);}
   .link-btn{background:none; color:var(--mutedDim); font-size:11.5px; text-decoration:underline; padding:0; width:auto; font-family:var(--mono);}
- 
+
   /* ---------- APP SHELL ---------- */
   #appView{height:100vh; display:flex;}
   aside{width:230px; flex-shrink:0; padding:20px; border-right:1px solid var(--border); display:flex; flex-direction:column;}
@@ -68,13 +68,13 @@
   nav.side-nav button .ico{font-size:15px; width:18px; text-align:center;}
   nav.side-nav button .badge-count{margin-left:auto; font-size:10px; padding:2px 6px; border-radius:999px; background:var(--dangerDim); color:var(--danger); font-family:var(--mono);}
   .side-foot{margin-top:auto; padding-top:16px; font-size:11px; color:var(--mutedDim); font-family:var(--mono); display:flex; align-items:center; gap:6px;}
- 
+
   main.content{flex:1; overflow-y:auto; display:flex; flex-direction:column;}
   header.top{display:flex; align-items:center; justify-content:space-between; padding:20px 28px; border-bottom:1px solid var(--border);}
   header.top h1{font-size:19px; margin:0;}
   .top-actions{display:flex; gap:8px;}
   .btn-small{padding:9px 14px; border-radius:10px; font-size:13px; font-weight:600; display:inline-flex; align-items:center; gap:6px;}
- 
+
   .view-body{padding:24px 28px 90px; flex:1;}
   .grid-stats{display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:20px;}
   @media(min-width:900px){ .grid-stats{grid-template-columns:repeat(4,1fr);} }
@@ -82,20 +82,20 @@
   .stat-card .label{font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--mutedDim); font-family:var(--mono);}
   .stat-card .value{font-size:24px; font-weight:600; margin-top:4px; font-family:var(--display);}
   .stat-card .sub{font-size:11.5px; color:var(--muted); margin-top:2px;}
- 
+
   .panel-block{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px;}
   .row-list{border:1px solid var(--border); border-radius:16px; overflow:hidden;}
   .row-item{display:flex; align-items:center; justify-content:space-between; gap:14px; padding:14px 16px; background:var(--panel); flex-wrap:wrap;}
   .row-item + .row-item{border-top:1px solid var(--border);}
   .row-empty{padding:34px; text-align:center; font-size:13px; color:var(--mutedDim);}
- 
+
   .badge{display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 10px; font-size:11px; font-family:var(--mono); font-weight:500;}
   .badge .d{width:6px; height:6px; border-radius:50%;}
   .badge-green{background:var(--accentDim); color:var(--accent);}
   .badge-red{background:var(--dangerDim); color:var(--danger);}
   .badge-amber{background:var(--warnDim); color:var(--warn);}
   .badge-gray{background:var(--panelAlt); color:var(--mutedDim);}
- 
+
   .search-bar{display:flex; align-items:center; gap:8px; padding:10px 13px; border-radius:12px; background:var(--panel); border:1px solid var(--border); flex:1;}
   .search-bar input{flex:1; background:transparent; border:none; outline:none; color:var(--text); font-family:var(--mono); font-size:13.5px;}
   .filter-tabs{display:flex; gap:3px; padding:4px; border-radius:12px; background:var(--panel); border:1px solid var(--border); flex-wrap:wrap;}
@@ -103,14 +103,14 @@
   .filter-tabs button.active{background:var(--panelAlt); color:var(--text);}
   .toolbar{display:flex; flex-direction:column; gap:10px; margin-bottom:16px;}
   @media(min-width:700px){ .toolbar{flex-direction:row;} }
- 
+
   .products-grid{display:grid; grid-template-columns:1fr; gap:14px;}
   @media(min-width:640px){ .products-grid{grid-template-columns:repeat(2,1fr);} }
   @media(min-width:1000px){ .products-grid{grid-template-columns:repeat(3,1fr);} }
   .product-card{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:20px; display:flex; flex-direction:column; gap:8px;}
- 
+
   .action-btn{display:inline-flex; align-items:center; gap:6px; padding:9px 13px; border-radius:10px; font-size:12px; font-weight:600;}
- 
+
   /* Modal */
   .modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:flex-end; justify-content:center; z-index:100; padding:0;}
   @media(min-width:640px){ .modal-backdrop{align-items:center; padding:16px;} }
@@ -119,25 +119,25 @@
   .modal-head{display:flex; align-items:center; justify-content:between; justify-content:space-between; margin-bottom:14px;}
   .modal-head h3{font-size:17px; margin:0;}
   .modal-close{background:none; color:var(--muted); font-size:19px; padding:4px;}
- 
+
   /* Mobile bottom nav */
   #mobileNav{display:none; position:fixed; bottom:0; left:0; right:0; background:var(--panel); border-top:1px solid var(--border); padding:6px 4px calc(6px + env(safe-area-inset-bottom)); z-index:40;}
   @media(max-width:840px){ #mobileNav{display:flex; justify-content:space-around;} aside{display:none;} }
   #mobileNav button{background:none; display:flex; flex-direction:column; align-items:center; gap:2px; color:var(--mutedDim); font-size:9px; font-family:var(--mono); padding:6px 8px;}
   #mobileNav button.active{color:var(--accent);}
   #mobileNav button .ico{font-size:16px;}
- 
+
   ::-webkit-scrollbar{width:8px; height:8px;}
   ::-webkit-scrollbar-thumb{background:var(--border); border-radius:8px;}
 </style>
 </head>
 <body>
- 
+
 <!-- =================== LOGIN =================== -->
 <div id="loginView">
   <div class="login-card">
     <div class="login-brand"><span class="dot"></span><span>Omnia Control</span></div>
- 
+
     <div id="setupStep">
       <h1>Configura la conexión</h1>
       <p class="sub">Pega la URL de tu Apps Script publicado (termina en <code>/exec</code>). Solo se pide una vez por dispositivo.</p>
@@ -145,7 +145,7 @@
       <button class="btn btn-accent" onclick="guardarApiUrl()">Guardar y continuar</button>
       <div class="aviso error" id="setupAviso"></div>
     </div>
- 
+
     <div id="loginStep" class="hidden">
       <h1>Acceso de administrador</h1>
       <p class="sub">Solo tú puedes entrar a este panel.</p>
@@ -158,7 +158,7 @@
     </div>
   </div>
 </div>
- 
+
 <!-- =================== APP =================== -->
 <div id="appView" class="hidden">
   <aside>
@@ -169,7 +169,7 @@
     <nav class="side-nav" id="sideNav"></nav>
     <div class="side-foot"><span id="syncStatus">● sincronizado</span></div>
   </aside>
- 
+
   <main class="content">
     <header class="top">
       <h1 id="viewTitle">Panel</h1>
@@ -178,10 +178,10 @@
     <div class="view-body" id="viewBody"></div>
   </main>
 </div>
- 
+
 <div id="mobileNav"></div>
 <div id="modalRoot"></div>
- 
+
 <script>
 /* =========================================================================
    CONFIGURACIÓN
@@ -197,18 +197,18 @@ const NAV = [
   { id: "leads", label: "Leads", ico: "📩" },
   { id: "settings", label: "Config.", ico: "⚙️" },
 ];
-const SHEETS = { products: "Products", licenses: "Licenses", sales: "Sales", payments: "Payments", demos: "DemoRequests", tickets: "Tickets", leads: "Leads" };
- 
+const SHEETS = { products: "Products", licenses: "Licenses", sales: "Sales", payments: "Payments", demos: "DemoRequests", tickets: "Tickets", leads: "Leads", config: "Config" };
+
 const SESSION_KEY = "omnia_admin_session";
 const SESSION_TTL_MIN = 30;
 const MAX_INTENTOS = 5;
 const BLOQUEO_MIN = 2;
 let intentosFallidos = 0, bloqueadoHasta = 0, inactividadTimer = null;
- 
+
 let currentView = "dashboard";
-let STATE = { products: [], licenses: [], sales: [], payments: [], demos: [], tickets: [], leads: [] };
+let STATE = { products: [], licenses: [], sales: [], payments: [], demos: [], tickets: [], leads: [], config: { activo: true, mensaje: "" }, configExists: false };
 let filters = { search: "", status: "all" };
- 
+
 /* =========================================================================
    UTILIDADES
    ========================================================================= */
@@ -222,7 +222,7 @@ function formatDateTime(iso){ if(!iso) return "—"; return new Date(iso).toLoca
 function daysLeft(iso){ if(!iso) return null; return Math.ceil((new Date(iso)-new Date())/86400000); }
 function productName(id){ const p = STATE.products.find(p=>p.id===id); return p ? p.name : "—"; }
 function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
- 
+
 async function apiList(sheetKey){
   const url = getApiUrl(); if(!url) return [];
   try{ const r = await fetch(`${url}?action=list&sheet=${encodeURIComponent(SHEETS[sheetKey])}`); const j = await r.json(); return Array.isArray(j)?j:[]; }
@@ -234,7 +234,7 @@ async function apiPost(body){
   catch(e){ console.error("Error escribiendo", body, e); return null; }
 }
 function setSyncStatus(text){ const el=document.getElementById("syncStatus"); if(el) el.textContent = text; }
- 
+
 /* =========================================================================
    SEGURIDAD / SESIÓN
    ========================================================================= */
@@ -257,7 +257,7 @@ function cerrarSesion(){
   mostrarLogin();
 }
 ["click","keydown","mousemove","touchstart"].forEach(evt => document.addEventListener(evt, () => { if(!document.getElementById("appView").classList.contains("hidden")) reiniciarInactividad(); }));
- 
+
 function mostrarSetup(){
   document.getElementById("setupStep").classList.remove("hidden");
   document.getElementById("loginStep").classList.add("hidden");
@@ -275,13 +275,13 @@ function guardarApiUrl(){
   aviso.style.display="none";
   mostrarLogin();
 }
- 
+
 async function intentarLogin(){
   const key = document.getElementById("adminKey").value.trim();
   const aviso = document.getElementById("loginAviso");
   const btn = document.getElementById("btnLogin");
   aviso.style.display = "none";
- 
+
   if(Date.now() < bloqueadoHasta){
     const seg = Math.ceil((bloqueadoHasta-Date.now())/1000);
     aviso.style.display="block"; aviso.textContent = `Demasiados intentos. Espera ${seg}s.`;
@@ -289,7 +289,7 @@ async function intentarLogin(){
   }
   if(!key){ aviso.style.display="block"; aviso.textContent="Ingresa la clave."; return; }
   if(!getApiUrl()){ mostrarSetup(); return; }
- 
+
   btn.disabled = true; btn.textContent = "Verificando...";
   try{
     const r = await fetch(`${getApiUrl()}?action=verificarAdminKey&key=${encodeURIComponent(key)}`);
@@ -310,21 +310,21 @@ async function intentarLogin(){
     btn.disabled=false; btn.textContent="Ingresar →";
   }
 }
- 
+
 function entrarAlPanel(){
   document.getElementById("loginView").classList.add("hidden");
   document.getElementById("appView").classList.remove("hidden");
   renderNav();
   cargarTodo();
 }
- 
+
 /* =========================================================================
    CARGA DE DATOS
    ========================================================================= */
 async function cargarTodo(){
   setSyncStatus("● sincronizando…");
-  const [products, licenses, sales, payments, demos, tickets, leads] = await Promise.all([
-    apiList("products"), apiList("licenses"), apiList("sales"), apiList("payments"), apiList("demos"), apiList("tickets"), apiList("leads"),
+  const [products, licenses, sales, payments, demos, tickets, leads, config] = await Promise.all([
+    apiList("products"), apiList("licenses"), apiList("sales"), apiList("payments"), apiList("demos"), apiList("tickets"), apiList("leads"), apiList("config"),
   ]);
   const now = Date.now();
   STATE.products = products;
@@ -334,11 +334,14 @@ async function cargarTodo(){
   STATE.demos = demos;
   STATE.tickets = tickets;
   STATE.leads = leads;
+  const globalCfg = config.find(c => c.id === "global");
+  STATE.config = globalCfg ? { activo: String(globalCfg.activo).toUpperCase() !== "FALSE", mensaje: globalCfg.mensaje || "" } : { activo: true, mensaje: "" };
+  STATE.configExists = !!globalCfg;
   setSyncStatus("● sincronizado");
   renderNav();
   renderView();
 }
- 
+
 /* =========================================================================
    NAVEGACIÓN
    ========================================================================= */
@@ -356,12 +359,12 @@ function renderNav(){
   document.getElementById("viewTitle").textContent = NAV.find(n=>n.id===currentView)?.label || "";
 }
 function irA(view){ currentView = view; filters = { search:"", status:"all" }; renderNav(); renderView(); }
- 
+
 function renderView(){
   const body = document.getElementById("viewBody");
   const actions = document.getElementById("viewActions");
   actions.innerHTML = "";
- 
+
   if(currentView==="dashboard") body.innerHTML = viewDashboard();
   if(currentView==="products"){ body.innerHTML = viewProducts(); actions.innerHTML = `<button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="abrirModalProducto()">+ Nuevo producto</button>`; }
   if(currentView==="licenses") body.innerHTML = viewLicenses();
@@ -372,7 +375,7 @@ function renderView(){
   if(currentView==="leads") body.innerHTML = viewLeads();
   if(currentView==="settings") body.innerHTML = viewSettings();
 }
- 
+
 /* =========================================================================
    VISTA: DASHBOARD
    ========================================================================= */
@@ -387,7 +390,7 @@ function viewDashboard(){
   const openTickets = STATE.tickets.filter(t=>t.status!=="resuelto").length;
   const proximos = STATE.licenses.filter(l=>l.type==="demo" && l.status==="active" && l.expiresAt)
     .sort((a,b)=>new Date(a.expiresAt)-new Date(b.expiresAt)).slice(0,6);
- 
+
   return `
     <div class="grid-stats">
       <div class="stat-card"><div class="label">Licencias Pro activas</div><div class="value" style="color:var(--accent)">${proActive}</div></div>
@@ -405,7 +408,7 @@ function viewDashboard(){
     </div>
   `;
 }
- 
+
 /* =========================================================================
    VISTA: PRODUCTOS
    ========================================================================= */
@@ -424,13 +427,13 @@ function viewProducts(){
       </div>
     </div>`).join("")}</div>`;
 }
- 
+
 /* =========================================================================
    VISTA: LICENCIAS
    ========================================================================= */
 function licenseTone(l){ if(l.status==="active") return "green"; if(l.status==="expired") return "amber"; return "red"; }
 function licenseLabel(l){ if(l.status==="active") return "ACTIVA"; if(l.status==="expired") return "EXPIRADA"; return "BLOQUEADA"; }
- 
+
 function viewLicenses(){
   const filtered = STATE.licenses.filter(l => {
     const s = (l.clientName+productName(l.productId)+l.key).toLowerCase().includes(filters.search.toLowerCase());
@@ -438,7 +441,7 @@ function viewLicenses(){
     return s && st;
   });
   const tabs = [["all","Todas"],["active","Activas"],["pro","Pro"],["demo","Demo"],["locked","Bloqueadas"],["expired","Expiradas"]];
- 
+
   return `
     <div class="toolbar">
       <div class="search-bar">🔎 <input placeholder="Buscar por cliente, producto o clave…" value="${esc(filters.search)}" oninput="filters.search=this.value; renderView();" /></div>
@@ -471,7 +474,7 @@ async function toggleLicense(id){
   lic.status = nuevo; renderView(); // optimista
   await apiPost({ action:"toggleLicense", id });
 }
- 
+
 /* =========================================================================
    VISTA: VENTAS / PAGOS / DEMOS / TICKETS
    ========================================================================= */
@@ -525,7 +528,7 @@ async function cambiarEstadoTicket(id, status){
   renderNav();
   await apiPost({ action:"update", sheet: SHEETS.tickets, id, data:{ status } });
 }
- 
+
 /* =========================================================================
    VISTA: LEADS ("contratar" / "pedir información" desde el sitio público —
    no generan licencia sola; les das seguimiento tú y cierras la venta
@@ -567,7 +570,7 @@ async function cambiarEstadoLead(id, status){
   renderNav();
   await apiPost({ action:"updateLeadStatus", id, status });
 }
- 
+
 /* =========================================================================
    VISTA: CONFIGURACIÓN
    ========================================================================= */
@@ -580,11 +583,22 @@ function viewSettings(){
         <button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="actualizarApiUrl()">Guardar</button>
       </div>
       <div class="panel-block">
+        <div style="font-size:13.5px; font-weight:600; margin-bottom:4px;">Interruptor global del servicio</div>
+        <p style="font-size:11.5px; color:var(--mutedDim); margin:0 0 12px; line-height:1.5;">Apaga TODAS las apps de TODOS los clientes a la vez (por ejemplo, si necesitas hacer mantenimiento). Cada app revisa este interruptor cuando verifica su licencia.</p>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <button class="btn-small" style="background:${STATE.config.activo?'var(--accentDim)':'var(--dangerDim)'}; color:${STATE.config.activo?'var(--accent)':'var(--danger)'};" onclick="toggleConfigGlobal()">
+            ${STATE.config.activo ? '🟢 Servicio activo — clic para apagar' : '🔴 Servicio apagado — clic para reactivar'}
+          </button>
+        </div>
+        <div class="field"><label>Mensaje que verán los clientes si está apagado</label><input id="settingsMensaje" value="${esc(STATE.config.mensaje)}" placeholder="Mantenimiento programado, volvemos pronto." style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text); font-size:13px;" /></div>
+        <button class="btn-small" style="background:var(--panelAlt); color:var(--text); border:1px solid var(--border);" onclick="guardarMensajeConfig()">Guardar mensaje</button>
+      </div>
+      <div class="panel-block">
         <div style="font-size:13.5px; font-weight:600; margin-bottom:8px;">Endpoint de verificación (referencia)</div>
         <pre style="background:var(--panelAlt); border:1px solid var(--border); border-radius:10px; padding:12px; font-family:var(--mono); font-size:11.5px; color:var(--muted); overflow-x:auto;">GET {tu-url}/exec?action=verify&key=XXXX-XXXX-XXXX-XXXX&productId=prod_x
- 
-200 { "status": "active" }
-403 { "status": "locked" | "expired" }</pre>
+
+200 { "status": "active", "expiresAt": "...", "clientName": "..." }
+403 { "status": "locked" | "expired" | "not_found" | "service_disabled" }</pre>
       </div>
       <div class="panel-block">
         <div style="font-size:13.5px; font-weight:600; margin-bottom:6px;">Sesión</div>
@@ -593,13 +607,28 @@ function viewSettings(){
     </div>
   `;
 }
+async function guardarConfigGlobal(){
+  const data = { id:"global", activo: STATE.config.activo, mensaje: STATE.config.mensaje };
+  if (STATE.configExists) { await apiPost({ action:"update", sheet: SHEETS.config, id:"global", data }); }
+  else { await apiPost({ action:"create", sheet: SHEETS.config, data }); STATE.configExists = true; }
+}
+async function toggleConfigGlobal(){
+  STATE.config.activo = !STATE.config.activo;
+  renderView();
+  await guardarConfigGlobal();
+}
+async function guardarMensajeConfig(){
+  STATE.config.mensaje = document.getElementById("settingsMensaje").value.trim();
+  await guardarConfigGlobal();
+  renderView();
+}
 function actualizarApiUrl(){ setApiUrl(document.getElementById("settingsUrl").value.trim()); cargarTodo(); }
- 
+
 /* =========================================================================
    MODALES: nuevo producto / venta / pago
    ========================================================================= */
 function cerrarModal(){ document.getElementById("modalRoot").innerHTML = ""; }
- 
+
 function abrirModalProducto(){
   document.getElementById("modalRoot").innerHTML = `
     <div class="modal-backdrop" onclick="if(event.target===this) cerrarModal()">
@@ -629,7 +658,7 @@ async function crearProducto(){
   STATE.products.unshift(data); cerrarModal(); renderView();
   await apiPost({ action:"create", sheet: SHEETS.products, data });
 }
- 
+
 function abrirModalVenta(){
   const opts = STATE.products.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join("");
   document.getElementById("modalRoot").innerHTML = `
@@ -652,11 +681,11 @@ async function crearVenta(){
   const amount = Number(document.getElementById("sAmount").value)||0;
   if(!productId || !clientName || !amount) return;
   cerrarModal();
- 
+
   const sale = { id: uid("sale"), productId, clientName, email, amount, date: new Date().toISOString(), stripeSessionId: "manual_"+Date.now() };
   const lic = { id: uid("lic"), productId, clientName, email, type:"pro", key: genKey(), status:"active", createdAt:new Date().toISOString(), expiresAt:"", stripeCustomerId:"", stripeSubscriptionId:"", lastNotifiedAt:"" };
   const pay = { id: uid("pay"), licenseId: lic.id, clientName, amount, date:new Date().toISOString(), status:"completado" };
- 
+
   STATE.sales.unshift(sale); STATE.licenses.unshift(lic); STATE.payments.unshift(pay); renderView();
   await Promise.all([
     apiPost({ action:"create", sheet: SHEETS.sales, data: sale }),
@@ -664,7 +693,7 @@ async function crearVenta(){
     apiPost({ action:"create", sheet: SHEETS.payments, data: pay }),
   ]);
 }
- 
+
 function abrirModalPago(){
   const proLic = STATE.licenses.filter(l=>l.type==="pro");
   const opts = proLic.map(l=>`<option value="${l.id}">${esc(l.clientName)}</option>`).join("");
@@ -688,7 +717,7 @@ async function crearPago(){
   STATE.payments.unshift(pay); renderView();
   await apiPost({ action:"create", sheet: SHEETS.payments, data: pay });
 }
- 
+
 /* =========================================================================
    ARRANQUE
    ========================================================================= */
@@ -696,12 +725,12 @@ document.addEventListener("DOMContentLoaded", () => {
   if(!getApiUrl()) mostrarSetup(); else mostrarLogin();
   document.getElementById("adminKey")?.addEventListener("keydown", e => { if(e.key==="Enter") intentarLogin(); });
   document.getElementById("setupUrl")?.addEventListener("keydown", e => { if(e.key==="Enter") guardarApiUrl(); });
- 
+
   if(verificarSesionExistente() && getApiUrl()){
     reiniciarInactividad();
     entrarAlPanel();
   }
- 
+
   if("serviceWorker" in navigator){
     navigator.serviceWorker.register("sw.js").catch(err => console.error("SW no registrado:", err));
   }
