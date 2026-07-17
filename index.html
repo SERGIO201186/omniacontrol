@@ -194,10 +194,9 @@ const NAV = [
   { id: "payments", label: "Pagos", ico: "💳" },
   { id: "demos", label: "Demos", ico: "🧪" },
   { id: "tickets", label: "Soporte", ico: "🛟" },
-  { id: "leads", label: "Leads", ico: "📩" },
   { id: "settings", label: "Config.", ico: "⚙️" },
 ];
-const SHEETS = { products: "Products", licenses: "Licenses", sales: "Sales", payments: "Payments", demos: "DemoRequests", tickets: "Tickets", leads: "Leads", config: "Config" };
+const SHEETS = { products: "Products", licenses: "Licenses", sales: "Sales", payments: "Payments", demos: "DemoRequests", tickets: "Tickets" };
 
 const SESSION_KEY = "omnia_admin_session";
 const SESSION_TTL_MIN = 30;
@@ -206,7 +205,7 @@ const BLOQUEO_MIN = 2;
 let intentosFallidos = 0, bloqueadoHasta = 0, inactividadTimer = null;
 
 let currentView = "dashboard";
-let STATE = { products: [], licenses: [], sales: [], payments: [], demos: [], tickets: [], leads: [], config: { activo: true, mensaje: "" }, configExists: false };
+let STATE = { products: [], licenses: [], sales: [], payments: [], demos: [], tickets: [] };
 let filters = { search: "", status: "all" };
 
 /* =========================================================================
@@ -302,7 +301,10 @@ async function intentarLogin(){
     } else {
       intentosFallidos++;
       if(intentosFallidos >= MAX_INTENTOS){ bloqueadoHasta = Date.now()+BLOQUEO_MIN*60000; intentosFallidos=0; }
-      aviso.style.display="block"; aviso.textContent="Clave incorrecta.";
+      aviso.style.display="block";
+      aviso.textContent = data && data.debug
+        ? `Clave incorrecta. Diagnóstico: ${JSON.stringify(data.debug)}`
+        : "Clave incorrecta.";
     }
   }catch(err){
     aviso.style.display="block"; aviso.textContent="Error de conexión: "+err.message;
@@ -323,8 +325,8 @@ function entrarAlPanel(){
    ========================================================================= */
 async function cargarTodo(){
   setSyncStatus("● sincronizando…");
-  const [products, licenses, sales, payments, demos, tickets, leads, config] = await Promise.all([
-    apiList("products"), apiList("licenses"), apiList("sales"), apiList("payments"), apiList("demos"), apiList("tickets"), apiList("leads"), apiList("config"),
+  const [products, licenses, sales, payments, demos, tickets] = await Promise.all([
+    apiList("products"), apiList("licenses"), apiList("sales"), apiList("payments"), apiList("demos"), apiList("tickets"),
   ]);
   const now = Date.now();
   STATE.products = products;
@@ -333,10 +335,6 @@ async function cargarTodo(){
   STATE.payments = payments;
   STATE.demos = demos;
   STATE.tickets = tickets;
-  STATE.leads = leads;
-  const globalCfg = config.find(c => c.id === "global");
-  STATE.config = globalCfg ? { activo: String(globalCfg.activo).toUpperCase() !== "FALSE", mensaje: globalCfg.mensaje || "" } : { activo: true, mensaje: "" };
-  STATE.configExists = !!globalCfg;
   setSyncStatus("● sincronizado");
   renderNav();
   renderView();
@@ -347,12 +345,10 @@ async function cargarTodo(){
    ========================================================================= */
 function renderNav(){
   const openTickets = STATE.tickets.filter(t=>t.status!=="resuelto").length;
-  const newLeads = STATE.leads.filter(l=>l.status==="nuevo").length;
-  const navHtml = (mobile) => NAV.filter(n => !mobile || ["dashboard","licenses","sales","demos","leads"].includes(n.id)).map(n => `
+  const navHtml = (mobile) => NAV.filter(n => !mobile || ["dashboard","licenses","sales","demos","tickets"].includes(n.id)).map(n => `
     <button class="${currentView===n.id?'active':''}" onclick="irA('${n.id}')">
       <span class="ico">${n.ico}</span>${mobile?'':`<span>${n.label}</span>`}
       ${n.id==="tickets" && openTickets>0 ? `<span class="badge-count">${openTickets}</span>` : ""}
-      ${n.id==="leads" && newLeads>0 ? `<span class="badge-count">${newLeads}</span>` : ""}
     </button>`).join("");
   document.getElementById("sideNav").innerHTML = navHtml(false);
   document.getElementById("mobileNav").innerHTML = navHtml(true);
@@ -372,7 +368,6 @@ function renderView(){
   if(currentView==="payments"){ body.innerHTML = viewPayments(); actions.innerHTML = `<button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="abrirModalPago()">+ Registrar cobro</button>`; }
   if(currentView==="demos") body.innerHTML = viewDemos();
   if(currentView==="tickets") body.innerHTML = viewTickets();
-  if(currentView==="leads") body.innerHTML = viewLeads();
   if(currentView==="settings") body.innerHTML = viewSettings();
 }
 
@@ -530,48 +525,6 @@ async function cambiarEstadoTicket(id, status){
 }
 
 /* =========================================================================
-   VISTA: LEADS ("contratar" / "pedir información" desde el sitio público —
-   no generan licencia sola; les das seguimiento tú y cierras la venta
-   manualmente desde Ventas cuando el cliente paga)
-   ========================================================================= */
-function leadToneLabel(status){
-  if(status==="nuevo") return ["red","NUEVO"];
-  if(status==="contactado") return ["amber","CONTACTADO"];
-  return ["green","CERRADO"];
-}
-function viewLeads(){
-  if(STATE.leads.length===0) return `<div class="row-empty">Todavía no hay solicitudes de contratación/información.</div>`;
-  const ordenados = [...STATE.leads].sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
-  return ordenados.map(l => {
-    const [tone, label] = leadToneLabel(l.status);
-    return `
-    <div class="panel-block" style="margin-bottom:10px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px;">
-      <div style="min-width:0; flex:1;">
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-          <span style="font-size:13.5px; font-weight:600;">${esc(l.businessName)}</span>
-          <span class="badge badge-${tone}">${label}</span>
-        </div>
-        <div style="font-size:11.5px; color:var(--muted); margin-top:4px;">${esc(l.contactName||"")} · <span style="font-family:var(--mono)">${esc(l.whatsapp)}</span>${l.email?` · ${esc(l.email)}`:""}${l.city?` · ${esc(l.city)}`:""}</div>
-        <div style="font-size:11.5px; color:var(--mutedDim); font-family:var(--mono); margin-top:4px;">${esc(l.products||"")} · ${formatDateTime(l.createdAt)}</div>
-      </div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <a href="https://wa.me/${esc((l.whatsapp||'').replace(/\\D/g,''))}" target="_blank" class="action-btn" style="background:var(--accentDim); color:var(--accent);">💬 WhatsApp</a>
-        <select onchange="cambiarEstadoLead('${l.id}', this.value)" style="padding:8px 10px; border-radius:9px; background:var(--panelAlt); border:1px solid var(--border); color:var(--text); font-size:12px;">
-          <option value="nuevo" ${l.status==='nuevo'?'selected':''}>Nuevo</option>
-          <option value="contactado" ${l.status==='contactado'?'selected':''}>Contactado</option>
-          <option value="cerrado" ${l.status==='cerrado'?'selected':''}>Cerrado</option>
-        </select>
-      </div>
-    </div>`;
-  }).join("");
-}
-async function cambiarEstadoLead(id, status){
-  const l = STATE.leads.find(x=>x.id===id); if(l) l.status = status;
-  renderNav();
-  await apiPost({ action:"updateLeadStatus", id, status });
-}
-
-/* =========================================================================
    VISTA: CONFIGURACIÓN
    ========================================================================= */
 function viewSettings(){
@@ -583,22 +536,11 @@ function viewSettings(){
         <button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="actualizarApiUrl()">Guardar</button>
       </div>
       <div class="panel-block">
-        <div style="font-size:13.5px; font-weight:600; margin-bottom:4px;">Interruptor global del servicio</div>
-        <p style="font-size:11.5px; color:var(--mutedDim); margin:0 0 12px; line-height:1.5;">Apaga TODAS las apps de TODOS los clientes a la vez (por ejemplo, si necesitas hacer mantenimiento). Cada app revisa este interruptor cuando verifica su licencia.</p>
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-          <button class="btn-small" style="background:${STATE.config.activo?'var(--accentDim)':'var(--dangerDim)'}; color:${STATE.config.activo?'var(--accent)':'var(--danger)'};" onclick="toggleConfigGlobal()">
-            ${STATE.config.activo ? '🟢 Servicio activo — clic para apagar' : '🔴 Servicio apagado — clic para reactivar'}
-          </button>
-        </div>
-        <div class="field"><label>Mensaje que verán los clientes si está apagado</label><input id="settingsMensaje" value="${esc(STATE.config.mensaje)}" placeholder="Mantenimiento programado, volvemos pronto." style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text); font-size:13px;" /></div>
-        <button class="btn-small" style="background:var(--panelAlt); color:var(--text); border:1px solid var(--border);" onclick="guardarMensajeConfig()">Guardar mensaje</button>
-      </div>
-      <div class="panel-block">
         <div style="font-size:13.5px; font-weight:600; margin-bottom:8px;">Endpoint de verificación (referencia)</div>
         <pre style="background:var(--panelAlt); border:1px solid var(--border); border-radius:10px; padding:12px; font-family:var(--mono); font-size:11.5px; color:var(--muted); overflow-x:auto;">GET {tu-url}/exec?action=verify&key=XXXX-XXXX-XXXX-XXXX&productId=prod_x
 
-200 { "status": "active", "expiresAt": "...", "clientName": "..." }
-403 { "status": "locked" | "expired" | "not_found" | "service_disabled" }</pre>
+200 { "status": "active" }
+403 { "status": "locked" | "expired" }</pre>
       </div>
       <div class="panel-block">
         <div style="font-size:13.5px; font-weight:600; margin-bottom:6px;">Sesión</div>
@@ -606,21 +548,6 @@ function viewSettings(){
       </div>
     </div>
   `;
-}
-async function guardarConfigGlobal(){
-  const data = { id:"global", activo: STATE.config.activo, mensaje: STATE.config.mensaje };
-  if (STATE.configExists) { await apiPost({ action:"update", sheet: SHEETS.config, id:"global", data }); }
-  else { await apiPost({ action:"create", sheet: SHEETS.config, data }); STATE.configExists = true; }
-}
-async function toggleConfigGlobal(){
-  STATE.config.activo = !STATE.config.activo;
-  renderView();
-  await guardarConfigGlobal();
-}
-async function guardarMensajeConfig(){
-  STATE.config.mensaje = document.getElementById("settingsMensaje").value.trim();
-  await guardarConfigGlobal();
-  renderView();
 }
 function actualizarApiUrl(){ setApiUrl(document.getElementById("settingsUrl").value.trim()); cargarTodo(); }
 
@@ -732,6 +659,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if("serviceWorker" in navigator){
+    let omniaSwRefrescando = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if(omniaSwRefrescando) return;
+      omniaSwRefrescando = true;
+      location.reload();
+    });
     navigator.serviceWorker.register("sw.js").catch(err => console.error("SW no registrado:", err));
   }
 });
