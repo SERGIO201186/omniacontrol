@@ -2,7 +2,7 @@
   "name": "Omnia Control",
   "short_name": "Omnia Control",
   "description": "Panel maestro de licencias, ventas y soporte de Omnia Technology",
-  "start_url": "./omnia-control.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
