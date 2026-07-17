@@ -1,5 +1,5 @@
 const CACHE = "omnia-control-v1";
-const SHELL = ["./omnia-control.html", "./manifest.json"];
+const SHELL = ["./index.html", "./manifest.json"];
  
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
