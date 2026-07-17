@@ -194,6 +194,7 @@ const NAV = [
   { id: "payments", label: "Pagos", ico: "💳" },
   { id: "demos", label: "Demos", ico: "🧪" },
   { id: "tickets", label: "Soporte", ico: "🛟" },
+  { id: "funeral360", label: "Funeral 360", ico: "🕊️" },
   { id: "settings", label: "Config.", ico: "⚙️" },
 ];
 const SHEETS = { products: "Products", licenses: "Licenses", sales: "Sales", payments: "Payments", demos: "DemoRequests", tickets: "Tickets" };
@@ -213,6 +214,8 @@ let filters = { search: "", status: "all" };
    ========================================================================= */
 function getApiUrl(){ return localStorage.getItem("omnia_api_url") || ""; }
 function setApiUrl(url){ localStorage.setItem("omnia_api_url", url); }
+function getF360Key(){ return localStorage.getItem("omnia_f360_key") || ""; }
+function setF360Key(key){ localStorage.setItem("omnia_f360_key", key); }
 function uid(p){ return `${p}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`; }
 function genKey(){ const s=()=>Math.random().toString(36).slice(2,6).toUpperCase(); return `${s()}-${s()}-${s()}-${s()}`; }
 function formatMoney(n){ return new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(Number(n)||0); }
@@ -368,6 +371,7 @@ function renderView(){
   if(currentView==="payments"){ body.innerHTML = viewPayments(); actions.innerHTML = `<button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="abrirModalPago()">+ Registrar cobro</button>`; }
   if(currentView==="demos") body.innerHTML = viewDemos();
   if(currentView==="tickets") body.innerHTML = viewTickets();
+  if(currentView==="funeral360") body.innerHTML = viewFuneral360();
   if(currentView==="settings") body.innerHTML = viewSettings();
 }
 
@@ -525,6 +529,42 @@ async function cambiarEstadoTicket(id, status){
 }
 
 /* =========================================================================
+   VISTA: FUNERAL 360 (panel maestro embebido por iframe)
+   ========================================================================= */
+const F360_URL = "https://sergio201186.github.io/Paginas/master.html";
+
+function viewFuneral360(){
+  const key = getF360Key();
+  if(!key){
+    return `
+      <div class="panel-block" style="max-width:520px;">
+        <div style="font-size:13.5px; font-weight:600; margin-bottom:8px;">Conecta el panel de Funeral 360</div>
+        <p style="font-size:12.5px; color:var(--muted); margin:0 0 14px; line-height:1.5;">Pega aquí la clave maestra de Funeral 360 (la misma de 6 caracteres que usabas en su login aparte). Se guarda en este dispositivo y no se te vuelve a pedir.</p>
+        <div class="field"><label>Clave maestra de Funeral 360</label><input id="f360KeyInput" type="password" placeholder="••••••" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text); font-family:var(--mono); font-size:13px;" /></div>
+        <button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="conectarF360()">Conectar</button>
+      </div>
+    `;
+  }
+  const src = F360_URL + "?mk=" + encodeURIComponent(key);
+  return `
+    <div style="height:calc(100vh - 140px); border:1px solid var(--border); border-radius:16px; overflow:hidden;">
+      <iframe src="${esc(src)}" style="width:100%; height:100%; border:none; background:#fff;"></iframe>
+    </div>
+    <div style="margin-top:8px;"><button class="link-btn" onclick="desconectarF360()">Cambiar clave / desconectar</button></div>
+  `;
+}
+function conectarF360(){
+  const val = document.getElementById("f360KeyInput").value.trim();
+  if(!val) return;
+  setF360Key(val);
+  renderView();
+}
+function desconectarF360(){
+  setF360Key("");
+  renderView();
+}
+
+/* =========================================================================
    VISTA: CONFIGURACIÓN
    ========================================================================= */
 function viewSettings(){
@@ -534,6 +574,11 @@ function viewSettings(){
         <div style="font-size:13.5px; font-weight:600; margin-bottom:8px;">Conexión con Google Sheets / Apps Script</div>
         <div class="field"><label>URL de Apps Script</label><input id="settingsUrl" value="${esc(getApiUrl())}" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text); font-family:var(--mono); font-size:13px;" /></div>
         <button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="actualizarApiUrl()">Guardar</button>
+      </div>
+      <div class="panel-block">
+        <div style="font-size:13.5px; font-weight:600; margin-bottom:8px;">Clave maestra de Funeral 360</div>
+        <div class="field"><label>Clave</label><input id="settingsF360Key" type="password" value="${esc(getF360Key())}" style="width:100%; padding:11px 13px; border-radius:9px; border:1px solid var(--border); background:var(--panelAlt); color:var(--text); font-family:var(--mono); font-size:13px;" /></div>
+        <button class="btn-small" style="background:var(--accent); color:#04140C;" onclick="actualizarF360Key()">Guardar</button>
       </div>
       <div class="panel-block">
         <div style="font-size:13.5px; font-weight:600; margin-bottom:8px;">Endpoint de verificación (referencia)</div>
@@ -549,6 +594,7 @@ function viewSettings(){
     </div>
   `;
 }
+function actualizarF360Key(){ setF360Key(document.getElementById("settingsF360Key").value.trim()); renderView(); }
 function actualizarApiUrl(){ setApiUrl(document.getElementById("settingsUrl").value.trim()); cargarTodo(); }
 
 /* =========================================================================
