@@ -505,8 +505,9 @@ function viewDemos(){
   }).join("")}</div>`;
 }
 function viewTickets(){
-  if(STATE.tickets.length===0) return `<div class="row-empty">Sin incidencias registradas.</div>`;
-  return STATE.tickets.map(t => `
+  const pendientes = STATE.tickets.filter(t=>t.status!=="resuelto");
+  if(pendientes.length===0) return `<div class="row-empty">Sin incidencias pendientes.</div>`;
+  return pendientes.map(t => `
     <div class="panel-block" style="margin-bottom:10px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px;">
       <div>
         <div style="display:flex; align-items:center; gap:8px;">
@@ -525,6 +526,7 @@ function viewTickets(){
 async function cambiarEstadoTicket(id, status){
   const t = STATE.tickets.find(x=>x.id===id); if(t) t.status = status;
   renderNav();
+  renderView();
   await apiPost({ action:"update", sheet: SHEETS.tickets, id, data:{ status } });
 }
 
