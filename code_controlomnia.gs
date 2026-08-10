@@ -719,7 +719,10 @@ function enviarCorreo(destinatario, asunto, cuerpo) {
     if (remitente) {
       GmailApp.sendEmail(destinatario, asunto, cuerpo, { from: remitente, name: "Omnia Technology" });
     } else {
-      MailApp.sendEmail(destinatario, asunto, cuerpo);
+      // Sin alias verificado: el correo real sigue siendo el de la cuenta dueña del
+      // script, pero al menos el destinatario ve "Omnia Technology" como nombre en
+      // vez de la dirección cruda. No requiere verificar nada.
+      MailApp.sendEmail(destinatario, asunto, cuerpo, { name: "Omnia Technology" });
     }
   } catch (e) {
     console.error("No se pudo enviar correo:", e.message);
