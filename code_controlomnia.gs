@@ -45,20 +45,39 @@
  *                   (Leads = solicitudes de "contratar/pedir información" que NO generan licencia
  *                   automáticamente — quedan como pendientes de seguimiento manual desde el Control
  *                   Maestro hasta que decidas cobrar y crear la venta/licencia tú mismo.)
+ *   MagicLinks   → id, email, token, createdAt, expiresAt, used, usedAt
+ *                   (tokens de un solo uso para el login del Portal de Cliente por magic link;
+ *                   se crean solas la primera vez que alguien pide un enlace de acceso.)
+ *   Sessions     → id, sessionToken, email, name, company, createdAt, expiresAt, revoked
+ *                   (sesiones del Portal de Cliente emitidas al validar un magic link.)
  *
  * PUBLICAR: Implementar → Nueva implementación → Aplicación web →
  * Ejecutar como "Yo" → Acceso "Cualquier usuario". Copia la URL /exec.
  *
  * ACTIVAR LA AUTOMATIZACIÓN: Triggers (reloj, barra lateral) → Añadir
  * trigger → función "revisarLicencias" → Basado en tiempo → cada hora.
+ *
+ * SOBRE CORS
+ * ---------------------------------------------------------------------
+ * Los Web Apps de Apps Script no permiten fijar el header
+ * Access-Control-Allow-Origin desde el código (Google los sirve siempre con
+ * acceso abierto). Por eso este backend NO confía en el origen de la
+ * petición para nada sensible: todo lo que toca datos de un cliente
+ * (getMyAccount, logout, el portal/checkout de Stripe) se autoriza con un
+ * sessionToken opaco e impredecible, nunca con el Origin/Referer.
  */
 
 const SHEET_NAMES = {
   products: "Products", licenses: "Licenses", sales: "Sales",
   payments: "Payments", demos: "DemoRequests", tickets: "Tickets",
-  leads: "Leads", config: "Config",
+  leads: "Leads", config: "Config", magicLinks: "MagicLinks", sessions: "Sessions",
 };
 const DIAS_AVISO_PREVIO = 2; // manda el recordatorio de "tu demo vence pronto" con estos días de anticipación
+const PORTAL_URL = "https://www.omnia-technology.com/omnia-portal.html";
+const MAGIC_LINK_TTL_MIN = 12; // vigencia del magic link
+const MAGIC_LINK_RATE_LIMIT = 3; // máx. solicitudes de magic link por correo...
+const MAGIC_LINK_RATE_WINDOW_MIN = 15; // ...dentro de esta ventana (minutos)
+const SESSION_TTL_DAYS = 7; // vigencia de la sesión del Portal de Cliente tras validar el magic link
 
 // =====================================================================
 // ENTRADA HTTP
@@ -95,6 +114,11 @@ function doPost(e) {
   if (action === "supportTicket") return handleSupportTicket(body);
   if (action === "toggleLicense") return handleToggleLicense(body.id);
   if (action === "updateLeadStatus") return handleUpdateLeadStatus(body);
+
+  if (action === "requestMagicLink") return handleRequestMagicLink(body);
+  if (action === "verifyMagicLink") return handleVerifyMagicLink(body);
+  if (action === "getMyAccount") return handleGetMyAccount(body);
+  if (action === "logout") return handleLogout(body);
 
   return jsonResponse({ error: "Acción no soportada" });
 }
@@ -235,11 +259,16 @@ function handleUpdateLeadStatus(body) {
 
 // =====================================================================
 // STRIPE — portal de facturación (el cliente paga/gestiona su suscripción solo)
+// Requiere sesión real: antes se confiaba en el email que mandaba el cliente
+// "a ciegas" (cualquiera podía pedir el portal de cualquier correo con solo
+// escribirlo). Ahora hay que haber iniciado sesión por magic link primero.
 // =====================================================================
 function handleCreateBillingPortalSession(body) {
-  const { email } = body;
+  const session = getValidSession(body.sessionToken);
+  if (!session) return jsonResponse({ error: "unauthorized" });
+
   const licenses = sheetToObjects(getSheet(SHEET_NAMES.licenses));
-  const lic = licenses.filter((l) => l.email === email && l.type === "pro" && l.stripeCustomerId)
+  const lic = licenses.filter((l) => sameEmail(l.email, session.email) && l.type === "pro" && l.stripeCustomerId)
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
   if (!lic) return jsonResponse({ error: "No encontramos una cuenta Pro con ese correo." });
 
@@ -247,7 +276,7 @@ function handleCreateBillingPortalSession(body) {
   const res = UrlFetchApp.fetch("https://api.stripe.com/v1/billing_portal/sessions", {
     method: "post",
     headers: { Authorization: "Bearer " + secretKey },
-    payload: { customer: lic.stripeCustomerId, return_url: "https://tu-sitio.com/portal" },
+    payload: { customer: lic.stripeCustomerId, return_url: PORTAL_URL },
     muteHttpExceptions: true,
   });
   const json = JSON.parse(res.getContentText());
@@ -257,13 +286,29 @@ function handleCreateBillingPortalSession(body) {
 
 // =====================================================================
 // STRIPE — crear sesión de pago
+// Sigue aceptando {productId, email, clientName} sin sesión: es el flujo de
+// compra para un prospecto nuevo que todavía no tiene cuenta (no rompe su
+// forma). Si además viene sessionToken (comprar/renovar desde el Portal de
+// Cliente ya autenticado), el email y el nombre se toman de la sesión y se
+// ignora cualquier email suelto que venga en el body.
 // =====================================================================
 function handleCreateCheckoutSession(body) {
-  const { productId, email, clientName } = body;
+  let email = body.email;
+  let clientName = body.clientName;
+
+  if (body.sessionToken) {
+    const session = getValidSession(body.sessionToken);
+    if (!session) return jsonResponse({ error: "unauthorized" });
+    email = session.email;
+    clientName = session.company || session.name || clientName;
+  }
+
+  const { productId } = body;
   const products = sheetToObjects(getSheet(SHEET_NAMES.products));
   const product = products.find((p) => p.id === productId);
   if (!product) return jsonResponse({ error: "Producto no encontrado" });
   if (!product.stripePriceId) return jsonResponse({ error: "Este producto no tiene stripePriceId configurado en el Sheet" });
+  if (!email) return jsonResponse({ error: "Falta el correo de facturación" });
 
   const secretKey = PropertiesService.getScriptProperties().getProperty("STRIPE_SECRET_KEY");
   const mode = product.billingCycle === "Único" ? "payment" : "subscription";
@@ -275,8 +320,8 @@ function handleCreateCheckoutSession(body) {
     "line_items[0][quantity]": "1",
     "metadata[productId]": productId,
     "metadata[clientName]": clientName,
-    "success_url": "https://tu-sitio.com/gracias?session_id={CHECKOUT_SESSION_ID}",
-    "cancel_url": "https://tu-sitio.com/productos",
+    "success_url": PORTAL_URL + "?checkout=success&session_id={CHECKOUT_SESSION_ID}",
+    "cancel_url": PORTAL_URL,
   };
 
   const res = UrlFetchApp.fetch("https://api.stripe.com/v1/checkout/sessions", {
@@ -289,6 +334,174 @@ function handleCreateCheckoutSession(body) {
   const json = JSON.parse(res.getContentText());
   if (json.error) return jsonResponse({ error: json.error.message });
   return jsonResponse({ url: json.url });
+}
+
+// =====================================================================
+// AUTENTICACIÓN DEL PORTAL DE CLIENTE — magic link (sin contraseñas)
+// =====================================================================
+
+// 1) Pedir el enlace de acceso. Responde SIEMPRE {ok:true} exista o no la
+//    cuenta, para no revelar qué correos están registrados. Solo manda el
+//    correo si el email pertenece a un cliente existente y no se superó el
+//    límite de solicitudes.
+function handleRequestMagicLink(body) {
+  const email = normalizeEmail(body.email);
+  if (!email) return jsonResponse({ ok: true });
+
+  try {
+    const sheet = getSheet(SHEET_NAMES.magicLinks);
+    const rows = sheetToObjects(sheet);
+    const now = Date.now();
+    const windowStart = now - MAGIC_LINK_RATE_WINDOW_MIN * 60000;
+    const recentCount = rows.filter((r) => sameEmail(r.email, email) && new Date(r.createdAt).getTime() >= windowStart).length;
+
+    if (recentCount < MAGIC_LINK_RATE_LIMIT) {
+      const profile = getClientProfile(email);
+      if (profile) {
+        const token = randomToken();
+        appendRow(sheet, {
+          id: "ml_" + now + "_" + Math.random().toString(36).slice(2, 6),
+          email, token,
+          createdAt: new Date(now).toISOString(),
+          expiresAt: new Date(now + MAGIC_LINK_TTL_MIN * 60000).toISOString(),
+          used: "false", usedAt: "",
+        });
+
+        const link = PORTAL_URL + "?login=" + encodeURIComponent(token);
+        enviarCorreo(email, "Tu acceso al Portal de Cliente Omnia",
+          `Hola,\n\nUsa este enlace para entrar a tu Portal de Cliente. Es válido por ${MAGIC_LINK_TTL_MIN} minutos y solo se puede usar una vez:\n\n${link}\n\nSi tú no pediste este acceso, ignora este correo — tu cuenta sigue segura.\n\n— Omnia Technology`);
+      }
+    }
+    // Si no hay cliente con ese correo, o ya se alcanzó el límite de solicitudes,
+    // no se hace nada más: la respuesta es idéntica en todos los casos.
+  } catch (err) {
+    console.error("requestMagicLink falló:", err.message);
+  }
+
+  return jsonResponse({ ok: true });
+}
+
+// 2) Canjear el token del magic link por una sesión del Portal de Cliente.
+function handleVerifyMagicLink(body) {
+  const token = String(body.token || "").trim();
+  if (!token) return jsonResponse({ error: "invalid_or_expired" });
+
+  const sheet = getSheet(SHEET_NAMES.magicLinks);
+  const rows = sheetToObjects(sheet);
+  const entry = rows.find((r) => r.token === token);
+  if (!entry) return jsonResponse({ error: "invalid_or_expired" });
+
+  const yaUsado = String(entry.used).toLowerCase() === "true";
+  const vencido = !entry.expiresAt || new Date(entry.expiresAt).getTime() < Date.now();
+  if (yaUsado || vencido) return jsonResponse({ error: "invalid_or_expired" });
+
+  // Invalida el token de inmediato (un solo uso) antes de emitir la sesión.
+  updateRowById(sheet, entry.id, { used: "true", usedAt: new Date().toISOString() });
+
+  const profile = getClientProfile(entry.email) || { name: "", company: "" };
+  const now = Date.now();
+  const sessionToken = randomToken();
+  const expiresAt = new Date(now + SESSION_TTL_DAYS * 86400000).toISOString();
+
+  appendRow(getSheet(SHEET_NAMES.sessions), {
+    id: "sess_" + now + "_" + Math.random().toString(36).slice(2, 6),
+    sessionToken, email: entry.email, name: profile.name, company: profile.company,
+    createdAt: new Date(now).toISOString(), expiresAt, revoked: "false",
+  });
+
+  return jsonResponse({
+    sessionToken, expiresAt,
+    client: { name: profile.name, email: entry.email, company: profile.company },
+  });
+}
+
+// 3) Datos de la cuenta del cliente autenticado: apps contratadas (con monto
+//    y vencimiento), pagos y tickets de soporte.
+function handleGetMyAccount(body) {
+  const session = getValidSession(body.sessionToken);
+  if (!session) return jsonResponse({ error: "unauthorized" });
+
+  const products = sheetToObjects(getSheet(SHEET_NAMES.products));
+  const licenses = sheetToObjects(getSheet(SHEET_NAMES.licenses)).filter((l) => sameEmail(l.email, session.email));
+  const payments = sheetToObjects(getSheet(SHEET_NAMES.payments));
+  const tickets = sheetToObjects(getSheet(SHEET_NAMES.tickets))
+    .filter((t) => sameEmail(t.email, session.email))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  const apps = licenses
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map((l) => {
+      const product = products.find((p) => p.id === l.productId) || {};
+      return {
+        licenseId: l.id, productId: l.productId, productName: product.name || l.productId,
+        type: l.type, status: l.status, key: l.key,
+        createdAt: l.createdAt, expiresAt: l.expiresAt || null,
+        amount: Number(product.proPrice) || 0, billingCycle: product.billingCycle || "",
+        payments: payments.filter((p) => p.licenseId === l.id)
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .map((p) => ({ id: p.id, amount: p.amount, date: p.date, status: p.status })),
+      };
+    });
+
+  return jsonResponse({
+    client: { name: session.name, email: session.email, company: session.company },
+    apps,
+    tickets: tickets.map((t) => ({ id: t.id, subject: t.subject, message: t.message, status: t.status, priority: t.priority, createdAt: t.createdAt })),
+  });
+}
+
+// 4) Cerrar sesión: invalida el sessionToken del lado del servidor.
+function handleLogout(body) {
+  const token = String(body.sessionToken || "").trim();
+  if (token) {
+    const sheet = getSheet(SHEET_NAMES.sessions);
+    const session = sheetToObjects(sheet).find((s) => s.sessionToken === token);
+    if (session) updateRowById(sheet, session.id, { revoked: "true" });
+  }
+  return jsonResponse({ ok: true });
+}
+
+// Sesión válida = existe, no fue revocada y no expiró. Se usa para proteger
+// getMyAccount, logout y el portal/checkout de Stripe.
+function getValidSession(sessionToken) {
+  const token = String(sessionToken || "").trim();
+  if (!token) return null;
+  const session = sheetToObjects(getSheet(SHEET_NAMES.sessions)).find((s) => s.sessionToken === token);
+  if (!session) return null;
+  if (String(session.revoked).toLowerCase() === "true") return null;
+  if (!session.expiresAt || new Date(session.expiresAt).getTime() < Date.now()) return null;
+  return session;
+}
+
+// Un correo "pertenece a un cliente existente" si tiene al menos una fila en
+// Licenses (demo o pro). Devuelve null si no hay ningún cliente con ese correo.
+function getClientProfile(email) {
+  const licenses = sheetToObjects(getSheet(SHEET_NAMES.licenses)).filter((l) => sameEmail(l.email, email));
+  if (!licenses.length) return null;
+
+  // DemoRequests trae name/company por separado; Licenses solo trae
+  // clientName (que para compras Pro por Stripe es el nombre/empresa que
+  // escribió el cliente al pagar). Se prioriza el registro de demo más
+  // reciente para distinguir nombre de empresa cuando existe.
+  const demo = sheetToObjects(getSheet(SHEET_NAMES.demos))
+    .filter((d) => sameEmail(d.email, email))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+  const latestLicense = licenses.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+
+  return {
+    name: (demo && demo.name) || latestLicense.clientName || "",
+    company: (demo && demo.company) || latestLicense.clientName || "",
+  };
+}
+
+function normalizeEmail(email) { return String(email || "").trim().toLowerCase(); }
+function sameEmail(a, b) { const na = normalizeEmail(a); return na !== "" && na === normalizeEmail(b); }
+
+// Token opaco y no adivinable: concatena dos UUID v4 (generador aleatorio
+// del runtime de Apps Script) para tener sobra de entropía en un string
+// largo, sin secuencias ni contadores predecibles.
+function randomToken() {
+  return (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, "");
 }
 
 // =====================================================================
@@ -411,6 +624,24 @@ function revisarLicencias() {
       enviarCorreo(l.email, "Tu demo está por vencer",
         `Hola,\n\nTu demo vence en ${Math.ceil(diasRestantes)} día(s). Si te interesa continuar, activa tu licencia Pro antes de que termine.\n\n— Omnia Technology`);
     }
+  });
+
+  limpiarAutenticacionVencida();
+}
+
+// Borra magic links y sesiones vencidos de hace más de un día, para que
+// MagicLinks/Sessions no crezcan indefinidamente. Se llama desde el mismo
+// trigger horario que ya revisa las licencias.
+function limpiarAutenticacionVencida() {
+  const margenMs = 86400000; // 1 día de margen tras vencer, por si acaso
+  [SHEET_NAMES.magicLinks, SHEET_NAMES.sessions].forEach((nombre) => {
+    const sheet = getSheet(nombre);
+    const rows = sheetToObjects(sheet);
+    rows.forEach((r) => {
+      if (r.expiresAt && new Date(r.expiresAt).getTime() + margenMs < Date.now()) {
+        deleteRowById(sheet, r.id);
+      }
+    });
   });
 }
 
