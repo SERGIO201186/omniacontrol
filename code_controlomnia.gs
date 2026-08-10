@@ -13,8 +13,10 @@
  *     licencia sigue activa (GET ?action=verify).
  *  3. Recibe solicitudes de demo desde el sitio público y genera la
  *     licencia con expiración automática según el producto.
- *  4. Crea sesiones de Stripe Checkout y procesa el webhook de Stripe
- *     (sin necesitar Node ni un servidor aparte).
+ *  4. Crea preferencias de pago de Mercado Pago (Checkout Pro) para compras
+ *     y renovaciones, y procesa su webhook para activar/renovar la licencia
+ *     Pro. El portal de facturación de los clientes Pro que ya tenías en
+ *     Stripe se queda tal cual estaba (Billing Portal + su webhook).
  *  5. Corre sola cada hora (trigger de tiempo) para expirar demos vencidas
  *     y mandar avisos de "tu demo está por vencer" / "tu demo venció" /
  *     "tu licencia se bloqueó por falta de pago" — todo por correo, con
@@ -27,18 +29,24 @@
  * Configuración del proyecto (ícono de engrane) → Propiedades del script
  * → añade:
  *   ADMIN_KEY               tu clave de acceso al Control Maestro
- *   STRIPE_SECRET_KEY       sk_live_... (o sk_test_... mientras pruebas)
+ *   STRIPE_SECRET_KEY       sk_live_... (o sk_test_... mientras pruebas) — solo para el Billing Portal
  *   STRIPE_WEBHOOK_SECRET   whsec_...
+ *   MERCADOPAGO_ACCESS_TOKEN  APP_USR-... (Access Token de producción o de prueba de tu cuenta de Mercado Pago)
  *   NOTIFICATION_EMAIL      correo donde quieres recibir avisos de tickets
  *   AUTOMATION_WEBHOOK_URL  (opcional) URL de un agente que quieras avisar
  *
  * PREPARA EL SHEET con estas pestañas y encabezados exactos:
  *   Products     → id, name, category, proPrice, billingCycle, demoDurationDays, description, stripePriceId, appUrl
  *                   (appUrl es opcional: la URL pública de esa app, ej. https://tu-usuario.github.io/tu-app/.
- *                   Si la llenas, el correo de demo le manda al cliente el link directo además de la clave.)
- *   Licenses     → id, productId, clientName, email, type, key, status, createdAt, expiresAt, stripeCustomerId, stripeSubscriptionId, lastNotifiedAt
- *   Sales        → id, productId, clientName, email, amount, date, stripeSessionId
- *   Payments     → id, licenseId, clientName, amount, date, status
+ *                   Si la llenas, el correo de demo le manda al cliente el link directo además de la clave.
+ *                   proPrice se usa directo para armar la preferencia de Mercado Pago — no hace falta
+ *                   preregistrar el precio en ningún lado. stripePriceId ya solo importa para clientes
+ *                   viejos que siguen gestionando su suscripción por el Billing Portal de Stripe.)
+ *   Licenses     → id, productId, clientName, email, type, key, status, createdAt, expiresAt, stripeCustomerId, stripeSubscriptionId, lastNotifiedAt, provider
+ *                   (provider = "mercadopago" en las licencias Pro nuevas, para que la renovación
+ *                   automática sepa a cuáles mandarles link de pago. Se agrega sola al crearse.)
+ *   Sales        → id, productId, clientName, email, amount, date, stripeSessionId, mpPaymentId
+ *   Payments     → id, licenseId, clientName, amount, date, status, mpPaymentId
  *   DemoRequests → id, productId, name, email, company, licenseId, createdAt
  *   Tickets      → id, clientName, email, subject, message, status, priority, createdAt
  *   Leads        → id, businessName, contactName, whatsapp, email, city, products, notes, createdAt, status
@@ -78,12 +86,20 @@ const MAGIC_LINK_TTL_MIN = 12; // vigencia del magic link
 const MAGIC_LINK_RATE_LIMIT = 3; // máx. solicitudes de magic link por correo...
 const MAGIC_LINK_RATE_WINDOW_MIN = 15; // ...dentro de esta ventana (minutos)
 const SESSION_TTL_DAYS = 7; // vigencia de la sesión del Portal de Cliente tras validar el magic link
+const MP_CURRENCY = "MXN";
+const RENOVACION_AVISO_DIAS = 3; // avisa (con nuevo link de pago) esta cantidad de días antes de que venza un ciclo Pro pagado por Mercado Pago
 
 // =====================================================================
 // ENTRADA HTTP
 // =====================================================================
 function doGet(e) {
   const action = e.parameter.action;
+
+  // Notificación de Mercado Pago en formato IPN clásico (llega por GET con
+  // ?type=payment&data.id=... o ?topic=payment&id=...). Los webhooks nuevos
+  // llegan por POST y se manejan en doPost.
+  if (e.parameter.type === "payment" && e.parameter["data.id"]) return handleMercadoPagoWebhook({ data: { id: e.parameter["data.id"] } });
+  if (e.parameter.topic === "payment" && e.parameter.id) return handleMercadoPagoWebhook({ data: { id: e.parameter.id } });
 
   if (action === "list") return jsonResponse(sheetToObjects(getSheet(e.parameter.sheet)));
   if (action === "verify") return handleVerify(e.parameter.key, e.parameter.productId);
@@ -99,6 +115,12 @@ function doPost(e) {
   // Webhook de Stripe: no trae "action", trae "type" y "data" (formato del evento de Stripe).
   if (body.type && body.data && !body.action) {
     return handleStripeWebhook(e, body);
+  }
+  // Webhook de Mercado Pago: manda "action" tipo "payment.created"/"payment.updated"
+  // (con punto) y "data.id". Ninguna acción propia de este dispatcher trae punto,
+  // así que no hay riesgo de choque con las de abajo.
+  if (body.data && body.data.id && typeof body.action === "string" && body.action.indexOf(".") !== -1) {
+    return handleMercadoPagoWebhook(body);
   }
 
   const { action, sheet: sheetName, data, id } = body;
@@ -285,7 +307,7 @@ function handleCreateBillingPortalSession(body) {
 }
 
 // =====================================================================
-// STRIPE — crear sesión de pago
+// MERCADO PAGO — crear preferencia de pago (Checkout Pro)
 // Sigue aceptando {productId, email, clientName} sin sesión: es el flujo de
 // compra para un prospecto nuevo que todavía no tiene cuenta (no rompe su
 // forma). Si además viene sessionToken (comprar/renovar desde el Portal de
@@ -307,33 +329,133 @@ function handleCreateCheckoutSession(body) {
   const products = sheetToObjects(getSheet(SHEET_NAMES.products));
   const product = products.find((p) => p.id === productId);
   if (!product) return jsonResponse({ error: "Producto no encontrado" });
-  if (!product.stripePriceId) return jsonResponse({ error: "Este producto no tiene stripePriceId configurado en el Sheet" });
+  if (!(Number(product.proPrice) > 0)) return jsonResponse({ error: "Este producto no tiene un precio (proPrice) configurado en el Sheet" });
   if (!email) return jsonResponse({ error: "Falta el correo de facturación" });
 
-  const secretKey = PropertiesService.getScriptProperties().getProperty("STRIPE_SECRET_KEY");
-  const mode = product.billingCycle === "Único" ? "payment" : "subscription";
+  return jsonResponse(crearPreferenciaMercadoPago(product, email, clientName || email));
+}
+
+// Crea una preferencia de pago de Mercado Pago (Checkout Pro) y devuelve
+// {url} con el init_point al que hay que redirigir al cliente, o {error}.
+// Se reutiliza tanto para la compra/renovación manual como para el link que
+// manda el aviso automático de renovación (ver revisarRenovacionMercadoPago).
+function crearPreferenciaMercadoPago(product, email, clientName) {
+  const accessToken = PropertiesService.getScriptProperties().getProperty("MERCADOPAGO_ACCESS_TOKEN");
+  if (!accessToken) return { error: "Mercado Pago no está configurado (falta MERCADOPAGO_ACCESS_TOKEN en Propiedades del script)." };
+
+  // external_reference viaja de ida y vuelta con el pago: así el webhook sabe
+  // qué producto y qué cliente acreditar sin tener que adivinar ni confiar
+  // en nada más del cuerpo de la notificación.
+  const externalReference = Utilities.base64Encode(JSON.stringify({ productId: product.id, email, clientName }));
 
   const payload = {
-    "mode": mode,
-    "customer_email": email,
-    "line_items[0][price]": product.stripePriceId,
-    "line_items[0][quantity]": "1",
-    "metadata[productId]": productId,
-    "metadata[clientName]": clientName,
-    "success_url": PORTAL_URL + "?checkout=success&session_id={CHECKOUT_SESSION_ID}",
-    "cancel_url": PORTAL_URL,
+    items: [{ title: product.name, quantity: 1, unit_price: Number(product.proPrice), currency_id: MP_CURRENCY }],
+    payer: { email },
+    external_reference: externalReference,
+    back_urls: { success: PORTAL_URL + "?mp=success", failure: PORTAL_URL + "?mp=failure", pending: PORTAL_URL + "?mp=pending" },
+    auto_return: "approved",
+    notification_url: ScriptApp.getService().getUrl(),
   };
 
-  const res = UrlFetchApp.fetch("https://api.stripe.com/v1/checkout/sessions", {
+  const res = UrlFetchApp.fetch("https://api.mercadopago.com/checkout/preferences", {
     method: "post",
-    headers: { Authorization: "Bearer " + secretKey },
-    payload,
+    contentType: "application/json",
+    headers: { Authorization: "Bearer " + accessToken },
+    payload: JSON.stringify(payload),
     muteHttpExceptions: true,
   });
 
   const json = JSON.parse(res.getContentText());
-  if (json.error) return jsonResponse({ error: json.error.message });
-  return jsonResponse({ url: json.url });
+  if (!json.init_point) return { error: (json.message || json.error || "No se pudo crear el pago con Mercado Pago") };
+  return { url: json.init_point };
+}
+
+// =====================================================================
+// MERCADO PAGO — webhook (notificaciones de pago)
+// Mercado Pago no tiene en Apps Script una verificación de firma tan directa
+// como Stripe, así que en vez de confiar en el cuerpo de la notificación se
+// vuelve a pedir el pago completo a la API con el access token — un POST
+// falsificado no puede inventarse así un pago "aprobado".
+// =====================================================================
+function handleMercadoPagoWebhook(body) {
+  const paymentId = body.data && body.data.id;
+  if (!paymentId) return jsonResponse({ received: true });
+
+  const accessToken = PropertiesService.getScriptProperties().getProperty("MERCADOPAGO_ACCESS_TOKEN");
+  if (!accessToken) return jsonResponse({ received: true });
+
+  const res = UrlFetchApp.fetch("https://api.mercadopago.com/v1/payments/" + encodeURIComponent(paymentId), {
+    headers: { Authorization: "Bearer " + accessToken },
+    muteHttpExceptions: true,
+  });
+  const payment = JSON.parse(res.getContentText());
+  if (!payment || payment.status !== "approved") return jsonResponse({ received: true });
+
+  // Idempotencia: Mercado Pago puede reintentar la misma notificación varias
+  // veces — si ya se acreditó este pago, no se vuelve a procesar.
+  const yaRegistrado = sheetToObjects(getSheet(SHEET_NAMES.payments)).some((p) => String(p.mpPaymentId) === String(payment.id));
+  if (yaRegistrado) return jsonResponse({ received: true });
+
+  let ref;
+  try { ref = JSON.parse(Utilities.newBlob(Utilities.base64Decode(payment.external_reference)).getDataAsString()); }
+  catch (err) { return jsonResponse({ received: true }); }
+
+  const product = sheetToObjects(getSheet(SHEET_NAMES.products)).find((p) => p.id === ref.productId);
+  if (!product) return jsonResponse({ received: true });
+
+  acreditarPagoMercadoPago(product, ref.email, ref.clientName, payment);
+  return jsonResponse({ received: true });
+}
+
+// Crea la licencia Pro (o la renueva si ya existía) y registra la venta/pago.
+function acreditarPagoMercadoPago(product, email, clientName, payment) {
+  const licenses = sheetToObjects(getSheet(SHEET_NAMES.licenses));
+  const existente = licenses.filter((l) => sameEmail(l.email, email) && l.productId === product.id && l.type === "pro")
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+
+  // Si todavía le quedaba vigencia, la renovación se suma desde ahí (no se
+  // pierden días pagados); si no, se cuenta desde hoy.
+  const baseFecha = existente && existente.expiresAt && new Date(existente.expiresAt) > new Date() ? new Date(existente.expiresAt) : new Date();
+  const expiresAt = product.billingCycle === "Único" ? "" : sumarCiclo(baseFecha, product.billingCycle).toISOString();
+
+  let licenseId, key;
+  if (existente) {
+    licenseId = existente.id;
+    key = existente.key;
+    updateRowById(getSheet(SHEET_NAMES.licenses), licenseId, { status: "active", expiresAt, lastNotifiedAt: "" });
+  } else {
+    licenseId = "lic_" + Date.now();
+    key = genKey();
+    appendRow(getSheet(SHEET_NAMES.licenses), {
+      id: licenseId, productId: product.id, clientName, email, type: "pro", key,
+      status: "active", createdAt: new Date().toISOString(), expiresAt,
+      stripeCustomerId: "", stripeSubscriptionId: "", lastNotifiedAt: "", provider: "mercadopago",
+    });
+  }
+
+  appendRow(getSheet(SHEET_NAMES.sales), {
+    id: "sale_" + Date.now(), productId: product.id, clientName, email,
+    amount: payment.transaction_amount, date: new Date().toISOString(), stripeSessionId: "", mpPaymentId: String(payment.id),
+  });
+  appendRow(getSheet(SHEET_NAMES.payments), {
+    id: "pay_" + Date.now(), licenseId, clientName, amount: payment.transaction_amount,
+    date: new Date().toISOString(), status: "completado", mpPaymentId: String(payment.id),
+  });
+
+  enviarCorreo(email,
+    existente ? `Tu renovación de ${product.name} se registró` : `Tu licencia Pro de ${product.name} está activa`,
+    existente
+      ? `Hola ${clientName},\n\nRecibimos tu pago y tu licencia sigue activa${expiresAt ? ` hasta el ${formatFecha(expiresAt)}` : ""}.\n\n— Omnia Technology`
+      : `Hola ${clientName},\n\nTu clave de licencia es:\n\n${key}\n\n${expiresAt ? `Vence el ${formatFecha(expiresAt)} — te avisaremos antes para renovar.` : ""}\n\n— Omnia Technology`);
+}
+
+// Suma un ciclo de cobro (Mensual/Anual) a una fecha base. "Único" no debería
+// llegar aquí — se resuelve antes como expiresAt:"" (sin vencimiento).
+function sumarCiclo(fechaBase, billingCycle) {
+  const d = new Date(fechaBase.getTime());
+  if (billingCycle === "Anual") d.setFullYear(d.getFullYear() + 1);
+  else d.setMonth(d.getMonth() + 1); // Mensual (y cualquier otro valor) por defecto
+  return d;
 }
 
 // =====================================================================
@@ -608,25 +730,60 @@ function revisarLicencias() {
   const ahora = Date.now();
 
   licencias.forEach((l) => {
-    if (l.type !== "demo" || !l.expiresAt) return;
-    const vence = new Date(l.expiresAt).getTime();
+    if (l.type === "demo" && l.expiresAt) {
+      const vence = new Date(l.expiresAt).getTime();
 
-    if (l.status === "active" && vence < ahora) {
-      updateRowById(sheet, l.id, { status: "expired", lastNotifiedAt: "expired" });
-      enviarCorreo(l.email, "Tu demo ha vencido",
-        `Hola,\n\nTu período de demo terminó. Si quieres seguir usando la app, responde este correo o visita omnia.tech para activar tu licencia Pro.\n\n— Omnia Technology`);
-      notificarWebhook(l, "expired");
+      if (l.status === "active" && vence < ahora) {
+        updateRowById(sheet, l.id, { status: "expired", lastNotifiedAt: "expired" });
+        enviarCorreo(l.email, "Tu demo ha vencido",
+          `Hola,\n\nTu período de demo terminó. Si quieres seguir usando la app, responde este correo o visita omnia.tech para activar tu licencia Pro.\n\n— Omnia Technology`);
+        notificarWebhook(l, "expired");
+        return;
+      }
+      const diasRestantes = (vence - ahora) / 86400000;
+      if (l.status === "active" && diasRestantes <= DIAS_AVISO_PREVIO && diasRestantes > 0 && l.lastNotifiedAt !== "soon") {
+        updateRowById(sheet, l.id, { lastNotifiedAt: "soon" });
+        enviarCorreo(l.email, "Tu demo está por vencer",
+          `Hola,\n\nTu demo vence en ${Math.ceil(diasRestantes)} día(s). Si te interesa continuar, activa tu licencia Pro antes de que termine.\n\n— Omnia Technology`);
+      }
       return;
     }
-    const diasRestantes = (vence - ahora) / 86400000;
-    if (l.status === "active" && diasRestantes <= DIAS_AVISO_PREVIO && diasRestantes > 0 && l.lastNotifiedAt !== "soon") {
-      updateRowById(sheet, l.id, { lastNotifiedAt: "soon" });
-      enviarCorreo(l.email, "Tu demo está por vencer",
-        `Hola,\n\nTu demo vence en ${Math.ceil(diasRestantes)} día(s). Si te interesa continuar, activa tu licencia Pro antes de que termine.\n\n— Omnia Technology`);
+
+    if (l.type === "pro" && l.provider === "mercadopago" && l.expiresAt) {
+      revisarRenovacionMercadoPago(sheet, l, ahora);
     }
   });
 
   limpiarAutenticacionVencida();
+}
+
+// Apps Pro pagadas por Mercado Pago con cobro manual por ciclo (no hay
+// "Preapproval" automático): manda un nuevo link de pago antes de que venza
+// y bloquea la licencia si el ciclo venció sin que llegara el pago.
+function revisarRenovacionMercadoPago(sheet, l, ahora) {
+  const vence = new Date(l.expiresAt).getTime();
+
+  if (l.status === "active" && vence < ahora) {
+    updateRowById(sheet, l.id, { status: "locked", lastNotifiedAt: "locked" });
+    enviarCorreo(l.email, "Tu licencia Pro quedó suspendida por falta de pago",
+      `Hola ${l.clientName},\n\nTu ciclo de pago venció y no vimos el pago a tiempo, así que tu licencia quedó suspendida. Paga aquí para reactivarla:\n\n${obtenerLinkRenovacion(l)}\n\n— Omnia Technology`);
+    notificarWebhook(l, "locked");
+    return;
+  }
+
+  const diasRestantes = (vence - ahora) / 86400000;
+  if (l.status === "active" && diasRestantes <= RENOVACION_AVISO_DIAS && diasRestantes > 0 && l.lastNotifiedAt !== "soon") {
+    updateRowById(sheet, l.id, { lastNotifiedAt: "soon" });
+    enviarCorreo(l.email, "Tu licencia Pro está por renovarse",
+      `Hola ${l.clientName},\n\nTu ciclo actual vence en ${Math.ceil(diasRestantes)} día(s). Paga aquí para renovar sin interrupciones:\n\n${obtenerLinkRenovacion(l)}\n\n— Omnia Technology`);
+  }
+}
+
+function obtenerLinkRenovacion(l) {
+  const product = sheetToObjects(getSheet(SHEET_NAMES.products)).find((p) => p.id === l.productId);
+  if (!product) return PORTAL_URL;
+  const res = crearPreferenciaMercadoPago(product, l.email, l.clientName);
+  return res.url || PORTAL_URL;
 }
 
 // Borra magic links y sesiones vencidos de hace más de un día, para que
