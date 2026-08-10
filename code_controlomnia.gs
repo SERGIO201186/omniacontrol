@@ -33,9 +33,11 @@
  *   AUTOMATION_WEBHOOK_URL  (opcional) URL de un agente que quieras avisar
  *
  * PREPARA EL SHEET con estas pestañas y encabezados exactos:
- *   Products     → id, name, category, proPrice, billingCycle, demoDurationDays, description, stripePriceId, appUrl
+ *   Products     → id, name, category, proPrice, billingCycle, demoDurationDays, description, stripePriceId, appUrl, manualUrl
  *                   (appUrl es opcional: la URL pública de esa app, ej. https://tu-usuario.github.io/tu-app/.
- *                   Si la llenas, el correo de demo le manda al cliente el link directo además de la clave.)
+ *                   Si la llenas, el correo de demo le manda al cliente el link directo además de la clave,
+ *                   y el Portal de Cliente muestra un botón "Abrir mi app". manualUrl es opcional también:
+ *                   si la llenas, el Portal de Cliente muestra un botón "Ver manual" para ese producto.)
  *   Licenses     → id, productId, clientName, email, type, key, status, createdAt, expiresAt, stripeCustomerId, stripeSubscriptionId, lastNotifiedAt
  *   Sales        → id, productId, clientName, email, amount, date, stripeSessionId
  *   Payments     → id, licenseId, clientName, amount, date, status
@@ -434,9 +436,11 @@ function handleGetMyAccount(body) {
       const product = products.find((p) => p.id === l.productId) || {};
       return {
         licenseId: l.id, productId: l.productId, productName: product.name || l.productId,
+        category: product.category || "", description: product.description || "",
         type: l.type, status: l.status, key: l.key,
         createdAt: l.createdAt, expiresAt: l.expiresAt || null,
         amount: Number(product.proPrice) || 0, billingCycle: product.billingCycle || "",
+        appUrl: product.appUrl || "", manualUrl: product.manualUrl || "",
         payments: payments.filter((p) => p.licenseId === l.id)
           .sort((a, b) => new Date(b.date) - new Date(a.date))
           .map((p) => ({ id: p.id, amount: p.amount, date: p.date, status: p.status })),
