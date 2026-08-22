@@ -30,6 +30,11 @@
  *   STRIPE_SECRET_KEY       sk_live_... (o sk_test_... mientras pruebas)
  *   STRIPE_WEBHOOK_SECRET   whsec_...
  *   NOTIFICATION_EMAIL      correo donde quieres recibir avisos de tickets
+ *   SENDER_EMAIL            (opcional) remitente de los correos automáticos, ej. ventas@omnia-technology.com.
+ *                           Debe estar verificado como alias "Enviar correo como" en la cuenta de Gmail
+ *                           que ejecuta este script (Gmail → Configuración → Cuentas e importación) —
+ *                           si no está verificado, el envío falla en silencio. Si dejas esta propiedad
+ *                           vacía, los correos se mandan desde la cuenta de Google dueña del script.
  *   AUTOMATION_WEBHOOK_URL  (opcional) URL de un agente que quieras avisar
  *
  * PREPARA EL SHEET con estas pestañas y encabezados exactos:
@@ -709,7 +714,19 @@ function formatFecha(iso) {
   return new Date(iso).toLocaleDateString("es-MX", { day: "2-digit", month: "long", year: "numeric" });
 }
 function enviarCorreo(destinatario, asunto, cuerpo) {
-  try { MailApp.sendEmail(destinatario, asunto, cuerpo); } catch (e) { console.error("No se pudo enviar correo:", e.message); }
+  try {
+    const remitente = PropertiesService.getScriptProperties().getProperty("SENDER_EMAIL");
+    if (remitente) {
+      GmailApp.sendEmail(destinatario, asunto, cuerpo, { from: remitente, name: "Omnia Technology" });
+    } else {
+      // Sin alias verificado: el correo real sigue siendo el de la cuenta dueña del
+      // script, pero al menos el destinatario ve "Omnia Technology" como nombre en
+      // vez de la dirección cruda. No requiere verificar nada.
+      MailApp.sendEmail(destinatario, asunto, cuerpo, { name: "Omnia Technology" });
+    }
+  } catch (e) {
+    console.error("No se pudo enviar correo:", e.message);
+  }
 }
 function notificarWebhook(license, evento) {
   const url = PropertiesService.getScriptProperties().getProperty("AUTOMATION_WEBHOOK_URL");
