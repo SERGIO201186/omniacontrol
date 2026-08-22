@@ -134,8 +134,11 @@ function handleVerify(key, productId) {
     return jsonResponse({ status: "service_disabled", message: cfgGlobal.mensaje || "El servicio está temporalmente desactivado por Omnia Technology." });
   }
 
+  // productId puede venir como una lista separada por comas (ej. "prod_novapos_v1,prod_novapos_v2")
+  // cuando la app cliente acepta licencias de varias versiones/tiers del mismo producto.
+  const productIds = productId ? String(productId).split(",").map((s) => s.trim()).filter(Boolean) : [];
   const licenses = sheetToObjects(getSheet(SHEET_NAMES.licenses));
-  const lic = licenses.find((l) => l.key === key && (!productId || l.productId === productId));
+  const lic = licenses.find((l) => l.key === key && (!productIds.length || productIds.includes(l.productId)));
   if (!lic) return jsonResponse({ status: "not_found" });
 
   if (lic.expiresAt && new Date(lic.expiresAt) < new Date() && lic.status === "active") {
@@ -524,8 +527,22 @@ function handleStripeWebhook(e, body) {
   const obj = body.data.object;
 
   if (type === "checkout.session.completed") {
-    const productId = obj.metadata.productId;
-    const clientName = obj.metadata.clientName;
+    const productId = obj.metadata && obj.metadata.productId;
+    const clientName = obj.metadata && obj.metadata.clientName;
+
+    // Si el pago no trae productId (ej. un Payment Link creado a mano en el dashboard
+    // de Stripe, sin pasar por createCheckoutSession/su metadata), no crear una licencia
+    // sin producto: el cliente nunca podría activarla (la app verifica por productId) y
+    // quedaría un registro "fantasma" en el Sheet. Se avisa al admin para que la cree a mano.
+    if (!productId) {
+      const notifyEmail = PropertiesService.getScriptProperties().getProperty("NOTIFICATION_EMAIL");
+      if (notifyEmail) {
+        enviarCorreo(notifyEmail, "⚠️ Pago de Stripe sin productId — revisar manualmente",
+          `Se completó un pago (session ${obj.id}, cliente ${obj.customer_email}, monto ${obj.amount_total}) pero no traía metadata.productId, así que no se generó licencia automáticamente. Créala a mano desde el Control Maestro y avísale al cliente.`);
+      }
+      return jsonResponse({ received: true, warning: "checkout sin productId, licencia no generada" });
+    }
+
     const licenseId = "lic_" + Date.now();
     const key = genKey();
 
@@ -539,8 +556,14 @@ function handleStripeWebhook(e, body) {
       amount: obj.amount_total, date: new Date().toISOString(), stripeSessionId: obj.id,
     });
 
+    // Igual que en la demo, si el producto tiene appUrl/manualUrl configurados en el Sheet
+    // se le manda al cliente el link directo para abrir su app ya activada, no solo la clave.
+    const product = sheetToObjects(getSheet(SHEET_NAMES.products)).find((p) => p.id === productId);
     enviarCorreo(obj.customer_email, "Tu licencia Pro está activa",
-      `Hola ${clientName},\n\nTu clave de licencia es:\n\n${key}\n\n— Omnia Technology`);
+      `Hola ${clientName},\n\nTu clave de licencia es:\n\n${key}` +
+      (product && product.appUrl ? `\n\nEntra a tu app aquí:\n${product.appUrl}` : '') +
+      (product && product.manualUrl ? `\n\nManual de uso:\n${product.manualUrl}` : '') +
+      `\n\n— Omnia Technology`);
   }
 
   if (type === "invoice.paid") {
