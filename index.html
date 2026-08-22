@@ -524,10 +524,23 @@ function viewTickets(){
     </div>`).join("");
 }
 async function cambiarEstadoTicket(id, status){
-  const t = STATE.tickets.find(x=>x.id===id); if(t) t.status = status;
+  // String(...) por si el id llega con un tipo distinto al de STATE (ej. Sheets
+  // lo guardó como número) — con === estricto ese desajuste hacía que find()
+  // nunca encontrara el ticket y el cambio pareciera no hacer nada.
+  const t = STATE.tickets.find(x=>String(x.id)===String(id));
+  const anterior = t ? t.status : null;
+  if(t) t.status = status;
   renderNav();
   renderView();
-  await apiPost({ action:"update", sheet: SHEETS.tickets, id, data:{ status } });
+  const res = await apiPost({ action:"update", sheet: SHEETS.tickets, id, data:{ status } });
+  if(!res || res.error){
+    // No se guardó en el Sheet: revierte la vista optimista y avisa, en vez de
+    // dejar que el admin crea que cambió cuando en realidad se va a perder al recargar.
+    if(t) t.status = anterior;
+    renderNav();
+    renderView();
+    alert("No se pudo guardar el cambio de estatus (" + (res && res.error ? res.error : "sin conexión con Google Sheets") + "). Verifica tu conexión e inténtalo de nuevo.");
+  }
 }
 
 /* =========================================================================
