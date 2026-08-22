@@ -152,7 +152,10 @@ function handleVerify(key, productId) {
   }
   if (lic.status !== "active") return jsonResponse({ status: lic.status, clientName: lic.clientName || "" });
 
-  return jsonResponse({ status: "active", expiresAt: lic.expiresAt || null, clientName: lic.clientName || "", type: lic.type || "" });
+  // Se regresa el productId exacto de la licencia (no la lista que mandó el cliente) para
+  // que la app pueda distinguir de qué versión/tier es — ej. NovaPOS usa esto para saber si
+  // la licencia es Versión 2 y así habilitar módulos exclusivos de ese tier (Recargas).
+  return jsonResponse({ status: "active", expiresAt: lic.expiresAt || null, clientName: lic.clientName || "", type: lic.type || "", productId: lic.productId || "" });
 }
 
 // Interruptor global de todo el servicio (todas las apps, todos los clientes).
