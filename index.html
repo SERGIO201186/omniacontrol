@@ -217,6 +217,10 @@ function setApiUrl(url){ localStorage.setItem("omnia_api_url", url); }
 function getF360Key(){ return localStorage.getItem("omnia_f360_key") || ""; }
 function setF360Key(key){ localStorage.setItem("omnia_f360_key", key); }
 function uid(p){ return `${p}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`; }
+// El selector de estatus del ticket solo ofrece abierto/en_progreso/resuelto, pero
+// algunos tickets quedaron con "cerrado" (editado directo en el Sheet) — sin esto
+// esos tickets nunca calzaban con !=="resuelto" y se quedaban "pendientes" para siempre.
+function isTicketClosed(status){ return ["resuelto","cerrado"].includes(String(status||"").trim().toLowerCase()); }
 function genKey(){ const s=()=>Math.random().toString(36).slice(2,6).toUpperCase(); return `${s()}-${s()}-${s()}-${s()}`; }
 function formatMoney(n){ return new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(Number(n)||0); }
 function formatDate(iso){ if(!iso) return "—"; return new Date(iso).toLocaleDateString("es-ES",{day:"2-digit",month:"short",year:"numeric"}); }
@@ -347,7 +351,7 @@ async function cargarTodo(){
    NAVEGACIÓN
    ========================================================================= */
 function renderNav(){
-  const openTickets = STATE.tickets.filter(t=>t.status!=="resuelto").length;
+  const openTickets = STATE.tickets.filter(t=>!isTicketClosed(t.status)).length;
   const navHtml = (mobile) => NAV.filter(n => !mobile || ["dashboard","licenses","sales","demos","tickets"].includes(n.id)).map(n => `
     <button class="${currentView===n.id?'active':''}" onclick="irA('${n.id}')">
       <span class="ico">${n.ico}</span>${mobile?'':`<span>${n.label}</span>`}
@@ -386,7 +390,7 @@ function viewDashboard(){
     const price = Number(p.proPrice)||0;
     return s + (p.billingCycle==="Mensual" ? price : p.billingCycle==="Anual" ? price/12 : 0);
   },0);
-  const openTickets = STATE.tickets.filter(t=>t.status!=="resuelto").length;
+  const openTickets = STATE.tickets.filter(t=>!isTicketClosed(t.status)).length;
   const proximos = STATE.licenses.filter(l=>l.type==="demo" && l.status==="active" && l.expiresAt)
     .sort((a,b)=>new Date(a.expiresAt)-new Date(b.expiresAt)).slice(0,6);
 
@@ -505,7 +509,7 @@ function viewDemos(){
   }).join("")}</div>`;
 }
 function viewTickets(){
-  const pendientes = STATE.tickets.filter(t=>t.status!=="resuelto");
+  const pendientes = STATE.tickets.filter(t=>!isTicketClosed(t.status));
   if(pendientes.length===0) return `<div class="row-empty">Sin incidencias pendientes.</div>`;
   return pendientes.map(t => `
     <div class="panel-block" style="margin-bottom:10px; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px;">
