@@ -110,7 +110,17 @@ function doPost(e) {
 
   const { action, sheet: sheetName, data, id } = body;
 
-  if (action === "create") { appendRow(getSheet(sheetName), data); return jsonResponse({ ok: true, data }); }
+  if (action === "create") {
+    // La pestaña Ventas se llenó de registros basura (sin productId ni clientName,
+    // algunos con amount 0) porque este endpoint genérico acepta cualquier "data"
+    // tal cual venga. Igual que el webhook de Stripe (ver handleStripeWebhook) no
+    // se guarda un registro fantasma en Ventas si falta lo mínimo indispensable.
+    if (sheetName === SHEET_NAMES.sales && !esVentaValida(data)) {
+      return jsonResponse({ error: "Venta incompleta: faltan productId, clientName o amount — no se guardó." });
+    }
+    appendRow(getSheet(sheetName), data);
+    return jsonResponse({ ok: true, data });
+  }
   if (action === "update") { updateRowById(getSheet(sheetName), id, data); return jsonResponse({ ok: true }); }
   if (action === "delete") { deleteRowById(getSheet(sheetName), id); return jsonResponse({ ok: true }); }
 
@@ -507,6 +517,10 @@ function getClientProfile(email) {
     name: (demo && demo.name) || latestLicense.clientName || "",
     company: (demo && demo.company) || latestLicense.clientName || "",
   };
+}
+
+function esVentaValida(data) {
+  return !!(data && data.productId && data.clientName && Number(data.amount) > 0);
 }
 
 function normalizeEmail(email) { return String(email || "").trim().toLowerCase(); }
