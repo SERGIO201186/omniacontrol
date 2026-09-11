@@ -236,7 +236,16 @@ function handleDemoRequest(body) {
   // Compatibilidad hacia atrás: si solo se pidió un producto, devuelve también
   // key/expiresAt "planos" como lo esperaba omnia-site.html.
   const response = { results };
-  if (results.length === 1 && !results[0].error) {
+  const huboExito = results.some((r) => !r.error);
+  if (!huboExito) {
+    // Antes, si el productId no existía en el Sheet (ej. un producto viejo/renombrado),
+    // esta función no generaba licencia ni mandaba correo pero tampoco marcaba error a
+    // nivel de respuesta — los sitios públicos (farmapos.html, index.html, etc.) solo
+    // revisan "res.error" y mostraban "✓ Demo activada" aunque no se hubiera creado nada.
+    response.error = results.length === 1
+      ? (results[0].error || "No se pudo generar la demo")
+      : "No se pudo generar ninguna licencia";
+  } else if (results.length === 1) {
     response.key = results[0].key;
     response.expiresAt = results[0].expiresAt;
   }
