@@ -90,6 +90,12 @@ const SESSION_TTL_DAYS = 7; // vigencia de la sesión del Portal de Cliente tras
 // ENTRADA HTTP
 // =====================================================================
 function doGet(e) {
+  // e.parameter no existe si esta función se dispara sin una petición HTTP real
+  // (ej. un trigger de "Al abrir" mal configurado apuntando aquí, o al ejecutarla
+  // manualmente desde el editor): sin esta guarda, tronaba con
+  // "Cannot read properties of undefined (reading 'action')".
+  if (!e || !e.parameter) return jsonResponse({ error: "Petición inválida: faltan parámetros" });
+
   const action = e.parameter.action;
 
   if (action === "list") return jsonResponse(sheetToObjects(getSheet(e.parameter.sheet)));
@@ -101,7 +107,19 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  const body = JSON.parse(e.postData.contents);
+  // e.postData no existe si esta función se dispara sin una petición HTTP real
+  // (mismo caso que doGet arriba): sin esta guarda, tronaba con
+  // "Cannot read properties of undefined (reading 'contents')".
+  if (!e || !e.postData || !e.postData.contents) {
+    return jsonResponse({ error: "Petición inválida: falta el cuerpo de la petición" });
+  }
+
+  let body;
+  try {
+    body = JSON.parse(e.postData.contents);
+  } catch (err) {
+    return jsonResponse({ error: "Cuerpo de la petición no es JSON válido" });
+  }
 
   // Webhook de Stripe: no trae "action", trae "type" y "data" (formato del evento de Stripe).
   if (body.type && body.data && !body.action) {
